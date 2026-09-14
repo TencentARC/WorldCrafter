@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "worldcore"
+version = "0.1.0"
+description = "Camera-controllable video world model with compact 3D-aware memory"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+dependencies = [
+    "torch==2.10.0+cu128",
+    "torchvision==0.25.0+cu128",
+    "triton==3.6.0",
+    "diffusers==0.37.0",
+    "transformers==5.3.0",
+    "accelerate==1.12.0",
+    "peft==0.18.1",
+    "huggingface-hub==1.4.1",
+    "safetensors",
+    "numpy<2.0.0",
+    "Pillow",
+    "imageio==2.37.3",
+    "imageio-ffmpeg==0.6.0",
+    "ftfy",
+    "regex",
+    "einops",
+    "flash-attn-3==3.0.0",
+    "packaging",
+    "kernels==0.13.0",
+    "timm==1.0.25",
+    "xformers==0.0.35",
+]
+
+[project.scripts]
+worldcore = "inference:main"
+
+[tool.setuptools]
+py-modules = ["inference"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["worldcore*"]
+
+[tool.setuptools.package-data]
+worldcore = [
+    "THIRD_PARTY_NOTICES.md",
+    "repencoder/LICENSE_VGGT",
+    "repencoder/THIRD_PARTY_NOTICES.md",
+]

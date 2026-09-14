@@ -1,0 +1,9 @@
+[project]
+name = "worldcore-runtime"
+version = "0.1.0"
+description = "Reproducible inference environment for WorldCore"
+requires-python = ">=3.11,<3.12"
+dependencies = ["worldcore"]
+
+[tool.uv.sources]
+worldcore = { path = "..", editable = true }

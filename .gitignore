@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+outputs/
+*.mp4
+
+# Model weights and generated artifacts
+weights/
+checkpoints/
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+experiments/
+logs/
+runs/
+wandb/
+.cache/

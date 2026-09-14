@@ -1,0 +1,21 @@
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.10.0+cu128
+torchvision==0.25.0+cu128
+triton==3.6.0
+diffusers==0.37.0
+transformers==5.3.0
+accelerate==1.12.0
+peft==0.18.1
+huggingface-hub==1.4.1
+safetensors
+numpy<2.0.0
+Pillow
+imageio==2.37.3
+imageio-ffmpeg==0.6.0
+ftfy
+regex
+einops
+packaging
+kernels==0.13.0
+timm==1.0.25
+xformers==0.0.35
