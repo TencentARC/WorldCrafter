@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from worldcore.cli import parse_args
-from worldcore.inference import WorldCore
+from worldcrafter.cli import parse_args
+from worldcrafter.inference import WorldCrafter
 
 
 def main() -> None:
     args = parse_args()
-    model = WorldCore.from_pretrained(
+    model = WorldCrafter.from_pretrained(
         args.model_path,
+        model_type=args.model_type,
         device=args.device,
         height=args.height,
         width=args.width,
@@ -23,6 +24,7 @@ def main() -> None:
         mode=args.mode,
         image_path=args.image_path,
         camera_path=args.camera_path,
+        local_camera_path=args.local_camera_path,
         output_path=args.output_path,
         chunk_output_dir=args.chunk_output_dir,
         state_output_dir=args.state_output_dir,

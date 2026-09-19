@@ -3,13 +3,12 @@ requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "worldcore"
+name = "worldcrafter"
 version = "0.1.0"
 description = "Camera-controllable video world model with compact 3D-aware memory"
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
-license = "Apache-2.0"
-license-files = ["LICENSE"]
+license-files = ["LICENSE.txt"]
 dependencies = [
     "torch==2.10.0+cu128",
     "torchvision==0.25.0+cu128",
@@ -35,18 +34,11 @@ dependencies = [
 ]
 
 [project.scripts]
-worldcore = "inference:main"
+worldcrafter = "inference:main"
 
 [tool.setuptools]
 py-modules = ["inference"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["worldcore*"]
-
-[tool.setuptools.package-data]
-worldcore = [
-    "THIRD_PARTY_NOTICES.md",
-    "repencoder/LICENSE_VGGT",
-    "repencoder/THIRD_PARTY_NOTICES.md",
-]
+include = ["worldcrafter*"]

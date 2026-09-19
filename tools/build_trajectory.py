@@ -77,7 +77,7 @@ def build_trajectory(events: list[str]) -> tuple[np.ndarray, list[dict[str, obje
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build a no-zero-velocity WorldCore trajectory")
+    parser = argparse.ArgumentParser(description="Build a no-zero-velocity WorldCrafter trajectory")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--events", nargs="+", required=True)
     args = parser.parse_args()
@@ -87,7 +87,7 @@ def main() -> None:
     camera_path = args.output_dir / "camera.npy"
     np.save(camera_path, camera[:, :3, :4])
     manifest = {
-        "format": "worldcore_camera_trajectory_v1",
+        "format": "worldcrafter_camera_trajectory_v1",
         "fps": FPS,
         "chunk_frames": CHUNK_FRAMES,
         "num_chunks": len(args.events),

@@ -1,176 +1,89 @@
-<div align="center">
+## *WorldCrafter: Consistent Video World Model with Implicit Memory Representation*
 
-# WorldCore
+🤗 If you find WorldCrafter useful, please consider giving this repo a ⭐. Your support helps us share and improve the project. Thank you!
 
-### Consistent Video World Model with Implicit Memory Representation
+## 🔆 Introduction
 
-Camera-controllable autoregressive video generation with a compact, fixed-budget, 3D-aware memory.
+WorldCrafter generates camera-controlled videos with a compact, 3D-aware memory. Given an image or text prompt and a camera trajectory, it generates video autoregressively while retaining scene information from earlier views.
 
-</div>
+We provide **WorldCrafter-Base** and **WorldCrafter-Fast**, a six-step distilled variant.
 
-## Overview
+## ⚙️ Setup
 
-WorldCore is a video world model designed for long-horizon, camera-controlled generation. It compresses selected latent observations from the generated history into a compact implicit representation and renders four target-aligned memory latents for each new video chunk. The memory budget remains fixed as the rollout grows.
+### 1. Environment
 
-The released inference stack contains:
+Validated on NVIDIA H200 with Linux, Python 3.11, and CUDA 12.8.
 
-- a camera-conditioned autoregressive video diffusion transformer;
-- an online trajectory-aware history selector;
-- RepEncoder, which converts nine historical latent views into four target-aligned memory views;
-- a default image and a closed-loop 6-DoF camera trajectory for end-to-end verification.
-
-The technical report is available at [`assets/main.pdf`](assets/main.pdf).
-
-## Installation
-
-WorldCore requires Python 3.11 and a CUDA GPU. The reference configuration was validated on NVIDIA H200 GPUs with CUDA 12.8.
+From the repository root, run:
 
 ```bash
-git clone <WORLDCORE_REPOSITORY_URL>
-cd WorldCore
-
-bash uvenv/sync_env.sh
-source .venv/bin/activate
+uv sync --project uvenv --frozen
+source uvenv/.venv/bin/activate
 ```
 
-The single `uvenv/` directory contains the locked inference environment. The
-setup script installs WorldCore in editable mode and obtains the compatible
-Flash-Attention kernel for the current PyTorch/CUDA backend. Platform-specific
-compiled kernel caches are not stored in the repository.
+Both models use the same environment. See [uvenv/README.md](uvenv/README.md) for dependency details.
 
-## Model weights
+### 2. Model weights
 
-Place the released weights under `weights/WorldCore_base`:
+Public weight downloads will be added when available. Place the model folders as follows:
 
 ```text
-weights/WorldCore_base/
-├── model_index.json
-├── scheduler/
-├── text_encoder/
-├── tokenizer/
-├── vae/
-├── transformer/
-├── adapter/
-│   ├── config.json
-│   ├── pytorch_lora_weights.safetensors
-│   └── camera_adapter.pth
-└── repencoder/
-    ├── config.json
-    ├── manifest.json
-    └── model.safetensors
+weights/
+├── WorldCrafter_base/
+└── WorldCrafter_fast/
 ```
 
-`WorldCore_base` is self-contained; inference does not load weights from any path outside this directory.
+Fast requires both folders: it shares the text encoder, tokenizer, VAE, scheduler configuration, and RepEncoder with Base.
 
-## Quick start
+## 💫 Inference
 
-The default command uses:
+### 1. Image-to-video
 
-- image: `test/images/023_Cat_Vac.png`;
-- prompt: `test/prompts/i2v.txt`;
-- global metric camera trajectory: `test/poses/camera.npy`;
-- seed `42`, 50 denoising steps, 384×640 resolution, and 16 FPS.
+Run the bundled image, prompt, and camera trajectory with either model:
 
 ```bash
-python inference.py
+# Base
+python inference.py --output-path outputs/base.mp4
+
+# Fast
+python inference.py --model-type fast --output-path outputs/fast.mp4
 ```
 
-The generated video and its JSON run record are written to:
+Fast uses six denoising steps per chunk and currently supports image-to-video at 384 × 640 in eager mode, without resume.
 
-```text
-outputs/023_Cat_Vac.mp4
-outputs/023_Cat_Vac.json
-```
-
-To save each completed 33-frame chunk independently:
+### 2. Text-to-video
 
 ```bash
-python inference.py --chunk-output-dir outputs/023_Cat_Vac_chunks
+python inference.py --mode t2v --output-path outputs/t2v.mp4
 ```
 
-Text-to-video uses its own included prompt and closed-loop camera trajectory:
-
-```bash
-python inference.py --mode t2v
-```
-
-This writes `outputs/prompt_02.mp4`. The default T2V prompt is stored in
-`test/prompts/t2v.txt`, and its 50-chunk global camera trajectory is stored in
-`test/poses/t2v_camera.npy`.
-
-Custom inputs can be provided without changing the code:
+### 3. Custom inputs
 
 ```bash
 python inference.py \
   --image-path path/to/image.png \
-  --camera-path path/to/global_c2w.npy \
-  --prompt "Your scene description." \
+  --camera-path path/to/camera.npy \
+  --prompt "A sunlit room with neatly arranged furniture." \
   --output-path outputs/custom.mp4
 ```
 
-Use `--prompt-path` to load a prompt from a text file. `--num-chunks 5` limits a
-run to the first five complete chunks without modifying the camera file.
+Camera trajectories use global camera-to-world matrices in `[T, 3, 4]` or `[T, 4, 4]` NumPy arrays, with metric translations and 33 frames per chunk. Example inputs are included in [`test/`](test/). Use `--num-chunks` to limit the rollout and `--chunk-output-dir` to save individual chunks.
 
-## Camera trajectory format
+Run `python inference.py --help` for all options.
 
-WorldCore accepts one global metric camera trajectory containing camera-to-world
-matrices in `[T, 3, 4]` or `[1, T, 3, 4]` format. Homogeneous `[T, 4, 4]`
-matrices are also accepted.
+## 📄 License
 
-- The global trajectory is used directly by online history selection and RepEncoder geometry.
-- UCPE camera conditioning derives every chunk's relative trajectory internally from the same global input.
-- No second local-pose file is required or accepted by the inference CLI.
-- A rollout contains complete 33-frame chunks.
-- The default example has 20 chunks and 660 frames, has no zero-velocity chunk boundaries, and returns to its initial pose after the final logical motion step.
+See [LICENSE.txt](LICENSE.txt) for the terms of use and third-party attributions.
 
-The included example trajectory is:
+## 🤗 Related Works
 
-```text
-f1×2, b1×4, yr45×2, yl45×4, right1×2, yr45×4, yl45×2
-```
-
-`f`, `b`, and `right` denote forward, backward, and rightward metric translation. `yr` and `yl` denote right and left yaw in degrees.
-
-## Repository layout
-
-```text
-WorldCore/
-├── inference.py
-├── worldcore/
-│   ├── diffusers/
-│   ├── kernels/
-│   ├── repencoder/
-│   └── ucpe/
-├── tools/
-├── uvenv/
-├── test/
-│   ├── images/
-│   ├── poses/
-│   └── prompts/
-├── weights/WorldCore_base/
-├── assets/main.pdf
-└── THIRD_PARTY_NOTICES.md
-```
-
-This repository contains inference and model code only. Training pipelines, dataset loaders, experiment launchers, and internal visualization utilities are not included.
-
-## Notes
-
-- Inference is currently optimized for batch size 1 at the video level.
-- RepEncoder evaluates its four target views together in one target batch.
-- Long autoregressive rollouts can amplify small numerical differences across GPU architectures or software versions. Use the documented environment and fixed seed for controlled comparisons.
-- Generated content may inherit limitations or biases from the underlying video model and its pretraining data.
-
-## License
-
-WorldCore source code is released under the Apache License 2.0 unless a file or bundled component states otherwise. See `worldcore/THIRD_PARTY_NOTICES.md` before use or redistribution.
-
-## Citation
-
-```bibtex
-@article{worldcore2026,
-  title   = {WorldCore: Consistent Video World Model with Implicit Memory Representation},
-  author  = {WorldCore Team},
-  year    = {2026}
-}
-```
+[Helios](https://github.com/PKU-YuanGroup/Helios),
+[LagerNVS](https://github.com/facebookresearch/lagernvs),
+[DreamX-World](https://github.com/AMAP-ML/DreamX-World),
+[EVOKE](https://github.com/AlayaLab/Evoke),
+[HY-WorldPlay](https://github.com/Tencent-Hunyuan/HY-WorldPlay),
+[Lyra 2.0](https://github.com/nv-tlabs/lyra/tree/main/Lyra-2),
+[Echo-WM](https://github.com/jd-opensource/JoyAI-Echo/tree/main/echo_wm),
+[LingBot-World 2](https://github.com/robbyant/lingbot-world-v2),
+[Matrix-Game 3.5](https://github.com/Riemann-Dynamics/Matrix-Game-3.5),
+[SANA-WM](https://github.com/NVlabs/Sana/blob/main/docs/sana_wm.md).

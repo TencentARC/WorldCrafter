@@ -972,7 +972,7 @@ wheels = [
 ]
 
 [[package]]
-name = "worldcore"
+name = "worldcrafter"
 version = "0.1.0"
 source = { editable = "../" }
 dependencies = [
@@ -1025,15 +1025,37 @@ requires-dist = [
 ]
 
 [[package]]
-name = "worldcore-runtime"
-version = "0.1.0"
-source = { virtual = "." }
+name = "worldcrafter-fa3-kernel"
+version = "1.0.0"
+source = { path = "wheels/worldcrafter_fa3_kernel-1.0.0-py3-none-linux_x86_64.whl" }
 dependencies = [
-    { name = "worldcore" },
+    { name = "kernels" },
+    { name = "torch" },
+]
+wheels = [
+    { filename = "worldcrafter_fa3_kernel-1.0.0-py3-none-linux_x86_64.whl", hash = "sha256:3946814b56829476182e5ca57e0ee44f1dbe29bf1bcc00a8cafa546384ecb5e9" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "worldcore", editable = "../" }]
+requires-dist = [
+    { name = "kernels", specifier = "==0.13.0" },
+    { name = "torch", specifier = "==2.10.0+cu128" },
+]
+
+[[package]]
+name = "worldcrafter-runtime"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "worldcrafter" },
+    { name = "worldcrafter-fa3-kernel", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "worldcrafter", editable = "../" },
+    { name = "worldcrafter-fa3-kernel", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'", path = "wheels/worldcrafter_fa3_kernel-1.0.0-py3-none-linux_x86_64.whl" },
+]
 
 [[package]]
 name = "xformers"

@@ -103,7 +103,7 @@ ROOT.mkdir(parents=True, exist_ok=True)
 camera_path = ROOT / "camera.npy"
 np.save(camera_path, global_pose[:, :3, :4])
 manifest = {
-    "format": "worldcore_camera_trajectory_v1",
+    "format": "worldcrafter_camera_trajectory_v1",
     "fps": FPS,
     "chunk_frames": CHUNK_FRAMES,
     "num_chunks": len(EVENTS),

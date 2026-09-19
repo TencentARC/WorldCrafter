@@ -7,14 +7,17 @@ outputs/
 *.mp4
 
 # Model weights and generated artifacts
-weights/
+/weights/
 checkpoints/
 *.safetensors
 *.pt
 *.pth
 *.ckpt
-experiments/
+/experiments/
 logs/
 runs/
 wandb/
 .cache/
+build/
+dist/
+*.egg-info/
