@@ -33,6 +33,12 @@ def main():
             if sha256(inputs / filename) != row[field]:
                 raise ValueError(f"Input checksum mismatch: {rel}/{filename}")
         frames = int(row["num_frames"])
+
+        def compare_chunk(index, path):
+            expected_chunk = reference / "chunks" / path.name
+            if path.read_bytes() != expected_chunk.read_bytes():
+                raise RuntimeError(f"Chunk {index} differs from {expected_chunk}")
+
         result = model.generate(
             mode="i2v",
             image_path=inputs / "image.png",
@@ -47,8 +53,7 @@ def main():
             guidance_scale=1.0,
             seed=42,
             fps=16,
-            reference_chunk_dir=reference / "chunks",
-            reference_chunk_count=frames // 33,
+            on_chunk_saved=compare_chunk,
         )
         actual, expected = result.video_path, reference / "video.mp4"
         report = dict(

@@ -8,14 +8,16 @@ supported. Both complete checkpoints remain represented on GPU at all times.
 """
 
 from dataclasses import dataclass
-from .streamed_switch import StreamedSwitchMixin
 import gc
+import logging
 import time
 import torch
 import torch.nn.functional as F
 import triton
 import triton.language as tl
 from triton.language.extra.cuda import libdevice
+
+logger = logging.getLogger(__name__)
 
 
 @triton.jit
@@ -131,9 +133,11 @@ class PackedDelta:
             )
 
 
-def encode(left, right, name="", forced=None):
-    assert left.dtype == right.dtype == torch.bfloat16 and left.shape == right.shape
-    assert left.is_cuda and left.is_contiguous() and right.is_contiguous()
+def encode(left, right, name=""):
+    if not (left.dtype == right.dtype == torch.bfloat16 and left.shape == right.shape):
+        raise ValueError("Invalid branch weight layout")
+    if not (left.is_cuda and left.is_contiguous() and right.is_contiguous()):
+        raise ValueError("Invalid branch weight layout")
     right = right.to(left.device)
     d = (
         (
@@ -143,7 +147,7 @@ def encode(left, right, name="", forced=None):
         .to(torch.int16)
         .int()
     )
-    expected_bytes, bits, mode = choose_format(d) if forced is None else forced
+    expected_bytes, bits, mode = choose_format(d)
     empty = torch.empty(0, device=left.device, dtype=torch.int32)
     p = PackedDelta(
         left.view(torch.int16).flatten(),
@@ -157,7 +161,8 @@ def encode(left, right, name="", forced=None):
         name,
     )
     if bits == 0:
-        assert bool((d == 0).all())
+        if not (bool((d == 0).all())):
+            raise ValueError("Invalid branch weight layout")
         return p
     if bits == 16:
         p.packed = d.to(torch.int16)
@@ -180,12 +185,13 @@ def encode(left, right, name="", forced=None):
         p.prefix = (counts.cumsum(0) - counts).to(torch.int32)
     else:
         raise ValueError(mode)
-    assert p.encoded_bytes == expected_bytes, (name, p.encoded_bytes, expected_bytes)
+    if not (p.encoded_bytes == expected_bytes):
+        raise ValueError((name, p.encoded_bytes, expected_bytes))
     return p
 
 
-class ResidentBranches(StreamedSwitchMixin):
-    def __init__(self, early, late, audit=None, use_graph=True):
+class ResidentBranches:
+    def __init__(self, early, late, use_graph=True):
         start = time.perf_counter()
         self.plans = []
         self.active = "equal"
@@ -194,7 +200,8 @@ class ResidentBranches(StreamedSwitchMixin):
         self.device = next(early.parameters()).device
         early_params = dict(early.named_parameters())
         late_params = dict(late.named_parameters())
-        assert set(early_params) == set(late_params)
+        if not (set(early_params) == set(late_params)):
+            raise ValueError("Invalid branch weight layout")
         before = torch.cuda.memory_allocated()
         shared_bytes = 0
         independent = []
@@ -207,35 +214,18 @@ class ResidentBranches(StreamedSwitchMixin):
             ):
                 independent.append(name)
                 continue
-            assert left.dtype == right.dtype and left.shape == right.shape, name
-            row = (
-                None if audit is None else audit.get(name.replace(".base_layer.", "."))
-            )
-            forced = None
-            if row:
-                options = [
-                    (
-                        cost,
-                        int(bits),
-                        "sparse"
-                        if int(bits) not in [0, 16]
-                        else ("shared" if bits == "0" else "dense"),
-                    )
-                    for bits, cost in row["costs"].items()
-                ]
-                options += [
-                    (cost, int(bits), "bitmap")
-                    for bits, cost in row["bitmap_costs"].items()
-                ]
-                forced = min(options)
-            plan = encode(left.detach(), right.detach(), name, forced)
-            # Verify every reconstructed bit pattern before discarding the late
-            # dense tensor; this also validates a cached format-selection audit.
+            if not (left.dtype == right.dtype and left.shape == right.shape):
+                raise ValueError(name)
+            plan = encode(left.detach(), right.detach(), name)
+            # Verify reconstruction before sharing the dense parameter storage.
             plan.apply(1)
-            assert torch.equal(
-                left.detach().view(torch.int16),
-                right.detach().to(left.device).view(torch.int16),
-            ), name
+            if not (
+                torch.equal(
+                    left.detach().view(torch.int16),
+                    right.detach().to(left.device).view(torch.int16),
+                )
+            ):
+                raise ValueError(name)
             plan.apply(-1)
             right.data = (
                 left.data
@@ -243,7 +233,7 @@ class ResidentBranches(StreamedSwitchMixin):
             self.plans.append(plan)
             shared_bytes += left.numel() * left.element_size()
             if len(self.plans) % 100 == 0:
-                print("PACKED", len(self.plans), flush=True)
+                logger.debug("Packed %d parameter tensors", len(self.plans))
         gc.collect()
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
@@ -276,14 +266,13 @@ class ResidentBranches(StreamedSwitchMixin):
             cuda_graph=use_graph,
             all_reconstructed_base_tensors_bitwise_verified=True,
         )
-        print("RESIDENT_DELTA_READY", self.report, flush=True)
+        logger.info("Prepared resident branches in %.1fs", self.report["setup_seconds"])
 
     def _apply(self, sign):
         for plan in self.plans:
             plan.apply(sign)
 
     def switch(self, branch):
-        self.wait_pending()
         if branch == self.active:
             return
         if branch not in ["equal", "old"]:

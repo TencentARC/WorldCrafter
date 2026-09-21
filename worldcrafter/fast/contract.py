@@ -34,37 +34,6 @@ class DmdInferenceTrace:
         return sum(len(stage) for stage in self.stages)
 
 
-def dmd_checkpoint_root(checkpoint_path: str | Path) -> Path:
-    """Resolve a sidecar, weight file, or directory to one checkpoint root."""
-
-    return resolve_dmd_contract_path(checkpoint_path).parent.expanduser().resolve()
-
-
-def validate_dmd_checkpoint_weight_paths(
-    checkpoint_path: str | Path,
-    **weight_paths: str | Path | None,
-) -> Path:
-    """Reject a timestep contract paired with weights from another checkpoint.
-
-    A matching filename is insufficient provenance: both the sidecar and every
-    explicitly supplied DMD weight must be siblings under the same canonical
-    checkpoint directory.  The returned root is useful when a caller wants to
-    default an omitted LoRA path to the contract checkpoint.
-    """
-
-    checkpoint_root = dmd_checkpoint_root(checkpoint_path)
-    for argument_name, weight_path in weight_paths.items():
-        if weight_path is None:
-            continue
-        weight_root = dmd_checkpoint_root(weight_path)
-        if weight_root != checkpoint_root:
-            raise ValueError(
-                "DMD timestep contract and weights must come from the same checkpoint: "
-                f"contract={checkpoint_root}, {argument_name}={weight_root}."
-            )
-    return checkpoint_root
-
-
 def load_dmd_inference_contract(
     checkpoint_path: str | Path,
     *,
@@ -106,7 +75,6 @@ def _history_nonempty_mask(
                 "DMD history tensors disagree on batch size: "
                 f"expected {batch_size}, got {int(history.shape[0])}"
             )
-        assert mask is not None
         current = history.detach().reshape(batch_size, -1).ne(0).any(dim=1)
         mask = mask | current.to(device=mask.device)
 

@@ -4,6 +4,7 @@ __pycache__/
 .ruff_cache/
 .venv/
 outputs/
+/output/
 *.mp4
 
 # Model weights and generated artifacts

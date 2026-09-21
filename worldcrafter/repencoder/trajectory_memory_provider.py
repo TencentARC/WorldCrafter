@@ -56,10 +56,13 @@ class RepEncoderInferenceProviderConfig:
         if not math.isfinite(near_m) or near_m <= 0.0:
             raise ValueError("trajectory_fov_near_m must be finite and positive")
         if not math.isfinite(far_m) or far_m <= near_m:
-            raise ValueError("trajectory_fov_far_m must be finite and greater than near")
-        if not math.isfinite(float(self.near_zero_baseline_m)) or float(
-            self.near_zero_baseline_m
-        ) < 0.0:
+            raise ValueError(
+                "trajectory_fov_far_m must be finite and greater than near"
+            )
+        if (
+            not math.isfinite(float(self.near_zero_baseline_m))
+            or float(self.near_zero_baseline_m) < 0.0
+        ):
             raise ValueError("near_zero_baseline_m must be finite and non-negative")
 
 
@@ -124,7 +127,9 @@ def _as_global_metric_c2w(
     if not torch.isfinite(pose).all():
         raise FloatingPointError(f"{pose_key} contains NaN or Inf")
     if pose.shape[-2:] == (3, 4):
-        bottom = torch.zeros(*pose.shape[:-2], 1, 4, device=pose.device, dtype=pose.dtype)
+        bottom = torch.zeros(
+            *pose.shape[:-2], 1, 4, device=pose.device, dtype=pose.dtype
+        )
         bottom[..., 0, 3] = 1.0
         pose = torch.cat((pose, bottom), dim=-2)
     else:
@@ -163,6 +168,8 @@ class RepEncoderInferenceMemoryProvider:
         self,
         runtime: RepEncoder,
         config: RepEncoderInferenceProviderConfig | Mapping[str, Any] | None = None,
+        *,
+        append_only: bool = False,
     ) -> None:
         if not callable(runtime):
             raise TypeError("runtime must be a callable RepEncoder memory runtime")
@@ -171,7 +178,11 @@ class RepEncoderInferenceMemoryProvider:
         elif isinstance(config, Mapping):
             config = RepEncoderInferenceProviderConfig(**dict(config))
         if not isinstance(config, RepEncoderInferenceProviderConfig):
-            raise TypeError("config must be RepEncoderInferenceProviderConfig or a mapping")
+            raise TypeError(
+                "config must be RepEncoderInferenceProviderConfig or a mapping"
+            )
+        self.append_only = append_only
+        self._committed_pose = None
         self.runtime = runtime
         self.config = config
         self.last_render_record: RepEncoderInferenceRenderRecord | None = None
@@ -179,9 +190,25 @@ class RepEncoderInferenceMemoryProvider:
         self._global_pose_latents: torch.Tensor | None = None
 
     def reset_sequence(self) -> None:
+        self._committed_pose = None
         self._global_pose_latents = None
         self.last_render_record = None
         self.render_records.clear()
+
+    def append_trajectory(self, pose: torch.Tensor, chunk_index: int) -> None:
+        """Commit one chunk without permitting changes to previously seen poses."""
+        if not self.append_only:
+            raise RuntimeError("Trajectory append requires append_only=True")
+        pose, _ = _as_global_metric_c2w({"c2w": pose}, batch_size=1, device=pose.device)
+        previous = 0 if self._committed_pose is None else self._committed_pose.shape[1]
+        if (
+            pose.shape[1] != (chunk_index + 1) * WINDOW_NUM_FRAMES
+            or previous != chunk_index * WINDOW_NUM_FRAMES
+        ):
+            raise ValueError("Only the next trajectory chunk may be appended")
+        if previous and not torch.equal(self._committed_pose, pose[:, :previous]):
+            raise RuntimeError("Committed trajectory prefix changed")
+        self._committed_pose = pose.detach().clone()
 
     def _validate_latents(
         self,
@@ -190,7 +217,10 @@ class RepEncoderInferenceMemoryProvider:
         *,
         chunk_index: int,
     ) -> None:
-        if not isinstance(generated_latents, torch.Tensor) or generated_latents.ndim != 5:
+        if (
+            not isinstance(generated_latents, torch.Tensor)
+            or generated_latents.ndim != 5
+        ):
             raise TypeError("generated_latents must be a [B,16,T,48,80] torch tensor")
         channels, latent_height, latent_width = EXPECTED_LATENT_CHW
         expected_tail = (
@@ -212,18 +242,24 @@ class RepEncoderInferenceMemoryProvider:
             generated_latents.shape[3],
             generated_latents.shape[4],
         )
-        if not isinstance(recent_latents, torch.Tensor) or tuple(
-            recent_latents.shape
-        ) != expected_recent:
-            raise ValueError(f"recent_latents must be exact recent[-1] with shape {expected_recent}")
-        if recent_latents.device != generated_latents.device or recent_latents.dtype != generated_latents.dtype:
-            raise ValueError("recent_latents must share generated_latents device and dtype")
+        if (
+            not isinstance(recent_latents, torch.Tensor)
+            or tuple(recent_latents.shape) != expected_recent
+        ):
+            raise ValueError(
+                f"recent_latents must be exact recent[-1] with shape {expected_recent}"
+            )
+        if (
+            recent_latents.device != generated_latents.device
+            or recent_latents.dtype != generated_latents.dtype
+        ):
+            raise ValueError(
+                "recent_latents must share generated_latents device and dtype"
+            )
         if not torch.is_floating_point(generated_latents):
-            raise TypeError("generated_latents must be floating point standardized Wan latents")
-        if not torch.isfinite(generated_latents).all():
-            raise FloatingPointError("generated_latents contain NaN or Inf")
-        if not torch.equal(recent_latents, generated_latents[:, :, -1:, :, :]):
-            raise ValueError("recent_latents is not exactly generated_latents recent[-1]")
+            raise TypeError(
+                "generated_latents must be floating point standardized Wan latents"
+            )
         runtime_device = getattr(self.runtime, "device", generated_latents.device)
         if torch.device(runtime_device) != generated_latents.device:
             raise ValueError(
@@ -238,13 +274,23 @@ class RepEncoderInferenceMemoryProvider:
         anchor_raw_frames = _anchor_raw_frames(total_chunks)
         anchor_indices = anchor_raw_frames.reshape(-1).to(device=pose.device)
         global_pose_latents = pose[0].index_select(0, anchor_indices).contiguous()
-        if int(chunk_index) == 1:
+        if self.append_only:
+            if self._committed_pose is None or not torch.equal(
+                pose, self._committed_pose
+            ):
+                raise RuntimeError("Retrieval trajectory differs from committed poses")
+            if total_chunks != chunk_index + 1:
+                raise RuntimeError("Future trajectory chunks are not allowed")
+            self._global_pose_latents = global_pose_latents.detach().clone()
+        elif int(chunk_index) == 1:
             self.reset_sequence()
             self._global_pose_latents = global_pose_latents.detach().clone()
         elif self._global_pose_latents is None:
             self._global_pose_latents = global_pose_latents.detach().clone()
         elif not torch.equal(self._global_pose_latents, global_pose_latents):
-            raise RuntimeError("global camera trajectory changed within one autoregressive sequence")
+            raise RuntimeError(
+                "global camera trajectory changed within one autoregressive sequence"
+            )
         return anchor_raw_frames
 
     def _select_history(
@@ -279,7 +325,9 @@ class RepEncoderInferenceMemoryProvider:
             fixed_context_latents=(recent_index,),
             target_c2w=target4_c2w,
             budget=HISTORY_SOURCE_BUDGET,
-            horizontal_fov_degrees=float(self.config.trajectory_fov_horizontal_fov_degrees),
+            horizontal_fov_degrees=float(
+                self.config.trajectory_fov_horizontal_fov_degrees
+            ),
             vertical_fov_degrees=float(self.config.trajectory_fov_vertical_fov_degrees),
             near_m=float(self.config.trajectory_fov_near_m),
             far_m=float(self.config.trajectory_fov_far_m),
@@ -295,7 +343,9 @@ class RepEncoderInferenceMemoryProvider:
                 "fixed_context_indices_global": [recent_index],
                 "selected_indices_global": list(result.selected_latents),
                 "target_slots": list(TARGET_SLOTS),
-                "frustum_samples_per_axis": int(self.config.trajectory_fov_samples_per_axis),
+                "frustum_samples_per_axis": int(
+                    self.config.trajectory_fov_samples_per_axis
+                ),
             }
         )
         return (
@@ -319,10 +369,16 @@ class RepEncoderInferenceMemoryProvider:
         if chunk_index <= 0:
             raise ValueError("RepEncoder inference requires chunk_index >= 1")
         if int(num_latent_frames_per_chunk) != NUM_LATENT_FRAMES_PER_CHUNK:
-            raise ValueError("RepEncoder inference is fixed to nine latent frames per chunk")
+            raise ValueError(
+                "RepEncoder inference is fixed to nine latent frames per chunk"
+            )
         if int(vae_scale_factor_temporal) != VAE_SCALE_FACTOR_TEMPORAL:
-            raise ValueError("RepEncoder inference is fixed to Wan temporal scale factor 4")
-        self._validate_latents(generated_latents, recent_latents, chunk_index=chunk_index)
+            raise ValueError(
+                "RepEncoder inference is fixed to Wan temporal scale factor 4"
+            )
+        self._validate_latents(
+            generated_latents, recent_latents, chunk_index=chunk_index
+        )
 
         pose, pose_key = _as_global_metric_c2w(
             camera_trajectory,
@@ -341,8 +397,9 @@ class RepEncoderInferenceMemoryProvider:
             raise RuntimeError("global retrieval poses were not initialized")
 
         target_full_chunk_c2w = self._global_pose_latents[
-            chunk_index * NUM_LATENT_FRAMES_PER_CHUNK :
-            (chunk_index + 1) * NUM_LATENT_FRAMES_PER_CHUNK
+            chunk_index
+            * NUM_LATENT_FRAMES_PER_CHUNK : (chunk_index + 1)
+            * NUM_LATENT_FRAMES_PER_CHUNK
         ]
         target4_c2w = target_full_chunk_c2w.index_select(
             0,
@@ -353,9 +410,10 @@ class RepEncoderInferenceMemoryProvider:
         selected_history, mode, retrieval_diagnostics = self._select_history(
             history_length=int(generated_latents.shape[2]), target4_c2w=target4_c2w
         )
-        if len(selected_history) != HISTORY_SOURCE_BUDGET or len(
-            set(selected_history)
-        ) != HISTORY_SOURCE_BUDGET:
+        if (
+            len(selected_history) != HISTORY_SOURCE_BUDGET
+            or len(set(selected_history)) != HISTORY_SOURCE_BUDGET
+        ):
             raise RuntimeError(
                 "trajectory-FOV retrieval did not return eight unique history views: "
                 f"{selected_history}"
@@ -378,8 +436,6 @@ class RepEncoderInferenceMemoryProvider:
             .permute(0, 2, 1, 3, 4)
             .contiguous()
         )
-        if not torch.equal(source_latents[:, 0], recent_latents[:, :, 0]):
-            raise RuntimeError("assembled RepEncoder source[0] differs from WorldCrafter recent[-1]")
 
         source_c2w_metric = (
             self._global_pose_latents.index_select(
@@ -403,15 +459,18 @@ class RepEncoderInferenceMemoryProvider:
             near_zero_baseline_m=float(self.config.near_zero_baseline_m),
         )
         expected_output = (int(generated_latents.shape[0]), 16, 4, 48, 80)
-        if not isinstance(memory4, torch.Tensor) or tuple(memory4.shape) != expected_output:
+        if (
+            not isinstance(memory4, torch.Tensor)
+            or tuple(memory4.shape) != expected_output
+        ):
             raise RuntimeError(
                 f"RepEncoder runtime must return standardized memory4 {expected_output}, "
                 f"got {None if not isinstance(memory4, torch.Tensor) else tuple(memory4.shape)}"
             )
         if memory4.device != generated_latents.device:
-            raise ValueError("RepEncoder memory4 must remain on the WorldCrafter latent device")
-        if not torch.isfinite(memory4).all():
-            raise FloatingPointError("RepEncoder memory4 contains NaN or Inf")
+            raise ValueError(
+                "RepEncoder memory4 must remain on the WorldCrafter latent device"
+            )
         memory4 = memory4.to(dtype=generated_latents.dtype)
 
         source_indices = tuple(

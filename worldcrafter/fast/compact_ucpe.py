@@ -23,15 +23,18 @@ def compact_ucpe(model):
             if isinstance(layer, nn.Linear):
                 modules.append(layer)
                 for p in layer.parameters(recurse=False):
-                    assert p.dtype == torch.float32
-                    assert torch.equal(p, p.bfloat16().float()), (
-                        "UCPE storage conversion would lose information"
-                    )
+                    if p.dtype != torch.float32:
+                        raise ValueError(
+                            f"Expected FP32 UCPE parameters, got {p.dtype}"
+                        )
+                    if not torch.equal(p, p.bfloat16().float()):
+                        raise ValueError(
+                            "UCPE storage conversion would lose information"
+                        )
                     parameters.append(p)
                     supported.add(id(p))
-        assert {id(p) for p in camera.parameters()} == supported, (
-            "Unsupported UCPE parameter type"
-        )
+        if {id(p) for p in camera.parameters()} != supported:
+            raise ValueError("Unsupported UCPE parameter type")
     saved = sum(p.numel() * 2 for p in parameters)
     for p in parameters:
         p.data = p.data.bfloat16()

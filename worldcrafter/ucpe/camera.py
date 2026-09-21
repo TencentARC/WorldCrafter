@@ -6,7 +6,6 @@ from .prope import PropeDotProductAttention
 from .attention import flash_attention
 from einops import rearrange, repeat, einsum
 import torch.nn.functional as F
-from typing import Tuple
 
 
 def compute_fx_from_fov_xi(
@@ -29,6 +28,7 @@ def compute_fx_from_fov_xi(
     Returns:
         fx: [B] Tensor，焦距（像素单位）
     """
+
     # --- 转为 Tensor ---
     def to_tensor_1d(x):
         if torch.is_tensor(x):
@@ -134,9 +134,7 @@ def _ucm_unproject_grid(
         1 + (1 - xi[:, None, None] * xi[:, None, None]) * r2
     )
     gamma = alpha / (1 + r2)
-    directions = torch.stack(
-        (gamma * x, gamma * y, gamma - xi[:, None, None]), dim=-1
-    )
+    directions = torch.stack((gamma * x, gamma * y, gamma - xi[:, None, None]), dim=-1)
     return directions[0] if scalar_input else directions
 
 
@@ -157,12 +155,18 @@ def ucm_unproject_grid_fov(
     if isinstance(device, str):
         device = torch.device(device)
 
-    is_batched = any(torch.is_tensor(p) and p.reshape(-1).numel() > 1 for p in [x_fov, xi])
+    is_batched = any(
+        torch.is_tensor(p) and p.reshape(-1).numel() > 1 for p in [x_fov, xi]
+    )
 
     # --- 计算 fx, fy ---
     fx = compute_fx_from_fov_xi(x_fov, xi, width, device, dtype)
     fy = fx
-    xi_grid = xi.to(device=device, dtype=dtype).reshape(-1) if torch.is_tensor(xi) else torch.tensor([xi], dtype=dtype, device=device)
+    xi_grid = (
+        xi.to(device=device, dtype=dtype).reshape(-1)
+        if torch.is_tensor(xi)
+        else torch.tensor([xi], dtype=dtype, device=device)
+    )
 
     d_cam = _ucm_unproject_grid(
         height=height,
@@ -188,7 +192,7 @@ def d_cam_to_angles(d_cam: torch.Tensor) -> torch.Tensor:
     """
     将方向向量 [x, y, z] 转换为 [azimuth, elevation]。
     坐标系：z前，x右，y下（符合 UCM 投影输出）
-    
+
     输入: d_cam: [B, H, W, 3]
     输出: angles: [B, H, W, 2] — azimuth, elevation （单位: 弧度）
     """
@@ -202,14 +206,14 @@ def d_cam_to_angles(d_cam: torch.Tensor) -> torch.Tensor:
     azimuth = torch.atan2(x, z)  # ∈ [-π, π]
 
     # pitch / elevation: angle above xz-plane
-    elevation = -torch.asin(y)   # y 向下 → elevation = -asin(y)
+    elevation = -torch.asin(y)  # y 向下 → elevation = -asin(y)
 
     return torch.stack([azimuth, elevation], dim=-1)  # [B, H, W, 2]
 
 
 def world_to_ray_mats(
     d_cam: torch.Tensor,  # [B, H, W, 3]
-    c2w: torch.Tensor,    # [B, T, 4, 4]
+    c2w: torch.Tensor,  # [B, T, 4, 4]
 ) -> torch.Tensor:
     """
     构造每条 ray 的世界到 ray 局部坐标系的变换矩阵 world2ray。
@@ -225,15 +229,21 @@ def world_to_ray_mats(
     if c2w.ndim == 3:
         c2w = c2w.unsqueeze(0)
     if d_cam.ndim != 4 or d_cam.shape[-1] != 3:
-        raise ValueError(f"d_cam must have shape [H,W,3] or [B,H,W,3], got {tuple(d_cam.shape)}")
+        raise ValueError(
+            f"d_cam must have shape [H,W,3] or [B,H,W,3], got {tuple(d_cam.shape)}"
+        )
     if c2w.ndim != 4 or c2w.shape[-2:] != (4, 4):
-        raise ValueError(f"c2w must have shape [T,4,4] or [B,T,4,4], got {tuple(c2w.shape)}")
+        raise ValueError(
+            f"c2w must have shape [T,4,4] or [B,T,4,4], got {tuple(c2w.shape)}"
+        )
     if d_cam.shape[0] == 1 and c2w.shape[0] != 1:
         d_cam = d_cam.expand(c2w.shape[0], -1, -1, -1)
     elif c2w.shape[0] == 1 and d_cam.shape[0] != 1:
         c2w = c2w.expand(d_cam.shape[0], -1, -1, -1)
     elif d_cam.shape[0] != c2w.shape[0]:
-        raise ValueError(f"d_cam and c2w batch mismatch: {d_cam.shape[0]} vs {c2w.shape[0]}")
+        raise ValueError(
+            f"d_cam and c2w batch mismatch: {d_cam.shape[0]} vs {c2w.shape[0]}"
+        )
 
     B, H, W, _ = d_cam.shape
     T = c2w.shape[1]
@@ -242,18 +252,18 @@ def world_to_ray_mats(
 
     # --- Expand ray dirs across frames ---
     # [B,H,W,3] -> [B,T,H,W,3]
-    d_cam = repeat(d_cam, 'b h w c -> b t h w c', t=T)
+    d_cam = repeat(d_cam, "b h w c -> b t h w c", t=T)
 
     # extract camera R,t
-    R_cam = c2w[..., :3, :3]       # [B,T,3,3]
-    t_cam = c2w[..., :3, 3]        # [B,T,3]
-    
+    R_cam = c2w[..., :3, :3]  # [B,T,3,3]
+    t_cam = c2w[..., :3, 3]  # [B,T,3]
+
     # --- d_world: rotate ray directions into world ---
-    d_world = einsum(R_cam, d_cam, 'b t i j, b t h w j -> b t h w i')
+    d_world = einsum(R_cam, d_cam, "b t i j, b t h w j -> b t h w i")
 
     # camera y-axis from each view
-    cam_y = R_cam[..., :, 1]       # [B,T,3]
-    cam_y = repeat(cam_y, 'b t c -> b t h w c', h=H, w=W)
+    cam_y = R_cam[..., :, 1]  # [B,T,3]
+    cam_y = repeat(cam_y, "b t c -> b t h w c", h=H, w=W)
 
     # === Construct orthonormal ray-local axes ===
     z_ray = F.normalize(d_world, dim=-1, eps=1e-6)
@@ -261,18 +271,18 @@ def world_to_ray_mats(
     x_ray = F.normalize(x_ray, dim=-1, eps=1e-6)
     y_ray = torch.cross(z_ray, x_ray, dim=-1)
     y_ray = F.normalize(y_ray, dim=-1, eps=1e-6)
-    
+
     # local->world rotation
     R_l2w = torch.stack([x_ray, y_ray, z_ray], dim=-1)  # [B,T,H,W,3,3]
 
     # world->local rotation (transpose)
-    R_w2l = rearrange(R_l2w, 'b t h w i j -> b t h w j i')  # ✅
+    R_w2l = rearrange(R_l2w, "b t h w i j -> b t h w j i")  # ✅
 
     # broadcast camera center
-    t_world = repeat(t_cam, 'b t c -> b t h w c', h=H, w=W)
+    t_world = repeat(t_cam, "b t c -> b t h w c", h=H, w=W)
 
     # world->local translation
-    t_w2l = -einsum(R_w2l, t_world, 'b t h w i j, b t h w j -> b t h w i')
+    t_w2l = -einsum(R_w2l, t_world, "b t h w i j, b t h w j -> b t h w i")
 
     # assemble transform matrix
     raymats = torch.zeros(B, T, H, W, 4, 4, device=device, dtype=dtype)
@@ -298,7 +308,7 @@ def compute_up_lat_map(
 ):
     """
     计算 up_map 和 lat_map。
-    
+
     Args:
         R: [B, T, 3, 3] 相机 c2w 旋转矩阵
         x_fov: [B] 或 [B,T] 水平视场角（度）
@@ -330,30 +340,42 @@ def compute_up_lat_map(
 
     # Step2：从相机系旋转到世界系
     d_cam_exp = repeat(d_cam, "B H W C -> B T H W C", T=T)  # [B, T, H, W, 3]
-    d_world = torch.einsum('btij,bthwj->bthwi', R, d_cam_exp)
+    d_world = torch.einsum("btij,bthwj->bthwi", R, d_cam_exp)
     d_world = d_world / torch.clamp_min(d_world.norm(dim=-1, keepdim=True), 1e-8)
 
     # Step3：计算纬度 map
     Xw, Yw, Zw = d_world[..., 0], d_world[..., 1], d_world[..., 2]
-    lat_map = torch.atan2(-Yw, torch.sqrt(Xw**2 + Zw**2)).unsqueeze(-1)  # [B, T, H, W, 1]
+    lat_map = torch.atan2(-Yw, torch.sqrt(Xw**2 + Zw**2)).unsqueeze(
+        -1
+    )  # [B, T, H, W, 1]
 
     # Step4：计算 up_map
     v = d_world  # 已归一化
-    up_world = torch.tensor([0, -1, 0], device=device, dtype=torch.float32)  # 世界上方方向（+Y 向下设定）
-    k = torch.cross(v, up_world.unsqueeze(0).unsqueeze(0).unsqueeze(0).expand_as(v), dim=-1)
+    up_world = torch.tensor(
+        [0, -1, 0], device=device, dtype=torch.float32
+    )  # 世界上方方向（+Y 向下设定）
+    k = torch.cross(
+        v, up_world.unsqueeze(0).unsqueeze(0).unsqueeze(0).expand_as(v), dim=-1
+    )
     k = k / torch.clamp_min(k.norm(dim=-1, keepdim=True), 1e-8)
 
     delta = torch.tensor(delta, device=device, dtype=torch.float32)
     cos_eps = torch.cos(delta)
     sin_eps = torch.sin(delta)
     # Rodrigues 公式旋转 v → v_rot
-    v_rot = v * cos_eps + torch.cross(k, v, dim=-1) * sin_eps + k * (k * (v * 1).sum(dim=-1, keepdim=True)) * (1 - cos_eps)
+    v_rot = (
+        v * cos_eps
+        + torch.cross(k, v, dim=-1) * sin_eps
+        + k * (k * (v * 1).sum(dim=-1, keepdim=True)) * (1 - cos_eps)
+    )
 
-    dirs_cam = torch.einsum('btij,bthwj->bthwi', R.transpose(-1, -2), v_rot)
+    dirs_cam = torch.einsum("btij,bthwj->bthwi", R.transpose(-1, -2), v_rot)
     Xs, Ys, Zs = dirs_cam[..., 0], dirs_cam[..., 1], dirs_cam[..., 2]
 
     du, dv = project_ucm_points_fov(
-        Xs, Ys, Zs,
+        Xs,
+        Ys,
+        Zs,
         x_fov=x_fov.float(),
         xi=xi.float(),
         height=height,
@@ -446,7 +468,9 @@ class UcpeSelfAttention(nn.Module):
         B, T, D = x.shape
         N = control_camera_dit_input["viewmats"].shape[1]  # number of cameras
         H, W = self.patches_y, self.patches_x
-        assert T == N * H * W or T == N, f"Expected token shape ({N}×{H}×{W} or {N}), got {T}"
+        assert (
+            T == N * H * W or T == N
+        ), f"Expected token shape ({N}×{H}×{W} or {N}), got {T}"
 
         # Camera geometry intentionally stays fp32, while WorldCrafter hidden states
         # and the UCPE adapter may independently be bf16/fp16 or fp32.  Keep
@@ -457,7 +481,9 @@ class UcpeSelfAttention(nn.Module):
         projected_x = x.to(dtype=projection_dtype)
 
         if hasattr(self, "cam_encoder") and "cam_emb" in control_camera_dit_input:
-            cam_emb = control_camera_dit_input["cam_emb"].to(dtype=self.cam_encoder.weight.dtype)
+            cam_emb = control_camera_dit_input["cam_emb"].to(
+                dtype=self.cam_encoder.weight.dtype
+            )
             y = self.cam_encoder(cam_emb)
             if y.shape[1] != T:
                 hw = T // cam_emb.shape[1]
@@ -465,9 +491,21 @@ class UcpeSelfAttention(nn.Module):
             projected_x = projected_x + y.to(dtype=projection_dtype)
 
         # Project Q, K, V
-        q = self.q_proj(projected_x).view(B, T, self.num_heads, self.head_dim).transpose(1, 2)  # [B, H, T, D_head]
-        k = self.k_proj(projected_x).view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
-        v = self.v_proj(projected_x).view(B, T, self.num_heads, self.head_dim).transpose(1, 2)
+        q = (
+            self.q_proj(projected_x)
+            .view(B, T, self.num_heads, self.head_dim)
+            .transpose(1, 2)
+        )  # [B, H, T, D_head]
+        k = (
+            self.k_proj(projected_x)
+            .view(B, T, self.num_heads, self.head_dim)
+            .transpose(1, 2)
+        )
+        v = (
+            self.v_proj(projected_x)
+            .view(B, T, self.num_heads, self.head_dim)
+            .transpose(1, 2)
+        )
 
         # Precompute camera-specific functions (only once per batch)
         self.prope_attn._precompute_and_cache_apply_fns(

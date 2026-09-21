@@ -29,8 +29,6 @@ def main() -> None:
         chunk_output_dir=args.chunk_output_dir,
         state_output_dir=args.state_output_dir,
         resume_from=args.resume_from,
-        reference_chunk_dir=args.reference_chunk_dir,
-        reference_chunk_count=args.reference_chunk_count,
         stop_after_chunk=args.stop_after_chunk,
         prompt=args.prompt,
         negative_prompt=args.negative_prompt,

@@ -1,13 +1,10 @@
 import html
-import json
-import math
 from itertools import accumulate
 from typing import Any, Callable
 
 import numpy as np
 import regex as re
 import torch
-import torch.nn.functional as F
 from transformers import AutoTokenizer, UMT5EncoderModel
 
 from diffusers.callbacks import MultiPipelineCallbacks, PipelineCallback
@@ -15,7 +12,12 @@ from diffusers.image_processor import PipelineImageInput
 from diffusers.loaders import HeliosLoraLoaderMixin as _BaseLoraLoaderMixin
 from diffusers.models import AutoencoderKLWan
 from diffusers.pipelines.pipeline_utils import DiffusionPipeline
-from diffusers.utils import is_ftfy_available, is_torch_xla_available, logging, replace_example_docstring
+from diffusers.utils import (
+    is_ftfy_available,
+    is_torch_xla_available,
+    logging,
+    replace_example_docstring,
+)
 from diffusers.utils.torch_utils import randn_tensor
 from diffusers.video_processor import VideoProcessor
 
@@ -53,7 +55,9 @@ def _render_repencoder_memory_latents(
         )
     render_memory = getattr(memory_provider, "render_memory", None)
     if not callable(render_memory):
-        raise TypeError("memory_provider must expose a callable render_memory(...) method")
+        raise TypeError(
+            "memory_provider must expose a callable render_memory(...) method"
+        )
 
     recent_latents = generated_latents[:, :, -1:, :, :]
     try:
@@ -67,7 +71,9 @@ def _render_repencoder_memory_latents(
             generator=generator,
         )
     except Exception as exc:
-        raise RuntimeError(f"RepEncoder memory rendering failed for chunk_index={chunk_index}") from exc
+        raise RuntimeError(
+            f"RepEncoder memory rendering failed for chunk_index={chunk_index}"
+        ) from exc
 
     expected_shape = (
         generated_latents.shape[0],
@@ -92,10 +98,15 @@ def _render_repencoder_memory_latents(
             f"expected {generated_latents.device}, got {memory_latents.device}"
         )
     if not memory_latents.is_floating_point():
-        raise TypeError(f"RepEncoder memory must be floating point, got {memory_latents.dtype}")
+        raise TypeError(
+            f"RepEncoder memory must be floating point, got {memory_latents.dtype}"
+        )
     if not torch.isfinite(memory_latents).all():
-        raise FloatingPointError(f"RepEncoder memory contains non-finite values at chunk_index={chunk_index}")
+        raise FloatingPointError(
+            f"RepEncoder memory contains non-finite values at chunk_index={chunk_index}"
+        )
     return memory_latents
+
 
 if is_ftfy_available():
     import ftfy
@@ -107,8 +118,8 @@ EXAMPLE_DOC_STRING = """
         which loads the local weights, camera trajectory, and memory provider:
 
         ```bash
-        python inference.py --model-path weights/WorldCrafter_base
-        python inference.py --model-type fast --model-path weights/WorldCrafter_fast
+        python inference.py --model-path weights/WorldCrafter-Base
+        python inference.py --model-type fast --model-path weights/WorldCrafter-Fast
         ```
 """
 
@@ -201,9 +212,15 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
         )
         self.register_to_config(is_cfg_zero_star=is_cfg_zero_star)
         self.register_to_config(is_distilled=is_distilled)
-        self.vae_scale_factor_temporal = self.vae.config.scale_factor_temporal if getattr(self, "vae", None) else 4
-        self.vae_scale_factor_spatial = self.vae.config.scale_factor_spatial if getattr(self, "vae", None) else 8
-        self.video_processor = VideoProcessor(vae_scale_factor=self.vae_scale_factor_spatial)
+        self.vae_scale_factor_temporal = (
+            self.vae.config.scale_factor_temporal if getattr(self, "vae", None) else 4
+        )
+        self.vae_scale_factor_spatial = (
+            self.vae.config.scale_factor_spatial if getattr(self, "vae", None) else 8
+        )
+        self.video_processor = VideoProcessor(
+            vae_scale_factor=self.vae_scale_factor_spatial
+        )
 
     def _get_t5_prompt_embeds(
         self,
@@ -232,17 +249,25 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
         text_input_ids, mask = text_inputs.input_ids, text_inputs.attention_mask
         seq_lens = mask.gt(0).sum(dim=1).long()
 
-        prompt_embeds = self.text_encoder(text_input_ids.to(device), mask.to(device)).last_hidden_state
+        prompt_embeds = self.text_encoder(
+            text_input_ids.to(device), mask.to(device)
+        ).last_hidden_state
         prompt_embeds = prompt_embeds.to(dtype=dtype, device=device)
         prompt_embeds = [u[:v] for u, v in zip(prompt_embeds, seq_lens)]
         prompt_embeds = torch.stack(
-            [torch.cat([u, u.new_zeros(max_sequence_length - u.size(0), u.size(1))]) for u in prompt_embeds], dim=0
+            [
+                torch.cat([u, u.new_zeros(max_sequence_length - u.size(0), u.size(1))])
+                for u in prompt_embeds
+            ],
+            dim=0,
         )
 
         # duplicate text embeddings for each generation per prompt, using mps friendly method
         _, seq_len, _ = prompt_embeds.shape
         prompt_embeds = prompt_embeds.repeat(1, num_videos_per_prompt, 1)
-        prompt_embeds = prompt_embeds.view(batch_size * num_videos_per_prompt, seq_len, -1)
+        prompt_embeds = prompt_embeds.view(
+            batch_size * num_videos_per_prompt, seq_len, -1
+        )
 
         return prompt_embeds, text_inputs.attention_mask.bool()
 
@@ -303,7 +328,11 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
 
         if do_classifier_free_guidance and negative_prompt_embeds is None:
             negative_prompt = negative_prompt or ""
-            negative_prompt = batch_size * [negative_prompt] if isinstance(negative_prompt, str) else negative_prompt
+            negative_prompt = (
+                batch_size * [negative_prompt]
+                if isinstance(negative_prompt, str)
+                else negative_prompt
+            )
 
             if prompt is not None and type(prompt) is not type(negative_prompt):
                 raise TypeError(
@@ -345,10 +374,13 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
         guidance_scale=None,
     ):
         if height % 16 != 0 or width % 16 != 0:
-            raise ValueError(f"`height` and `width` have to be divisible by 16 but are {height} and {width}.")
+            raise ValueError(
+                f"`height` and `width` have to be divisible by 16 but are {height} and {width}."
+            )
 
         if callback_on_step_end_tensor_inputs is not None and not all(
-            k in self._callback_tensor_inputs for k in callback_on_step_end_tensor_inputs
+            k in self._callback_tensor_inputs
+            for k in callback_on_step_end_tensor_inputs
         ):
             raise ValueError(
                 f"`callback_on_step_end_tensor_inputs` has to be in {self._callback_tensor_inputs}, but found {[k for k in callback_on_step_end_tensor_inputs if k not in self._callback_tensor_inputs]}"
@@ -368,28 +400,39 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
             raise ValueError(
                 "Provide either `prompt` or `prompt_embeds`. Cannot leave both `prompt` and `prompt_embeds` undefined."
             )
-        elif prompt is not None and (not isinstance(prompt, str) and not isinstance(prompt, list)):
-            raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
-        elif negative_prompt is not None and (
-            not isinstance(negative_prompt, str) and not isinstance(negative_prompt, list)
+        elif prompt is not None and (
+            not isinstance(prompt, str) and not isinstance(prompt, list)
         ):
-            raise ValueError(f"`negative_prompt` has to be of type `str` or `list` but is {type(negative_prompt)}")
+            raise ValueError(
+                f"`prompt` has to be of type `str` or `list` but is {type(prompt)}"
+            )
+        elif negative_prompt is not None and (
+            not isinstance(negative_prompt, str)
+            and not isinstance(negative_prompt, list)
+        ):
+            raise ValueError(
+                f"`negative_prompt` has to be of type `str` or `list` but is {type(negative_prompt)}"
+            )
 
         if image is not None and video is not None:
             raise ValueError("image and video cannot be provided simultaneously")
 
         if use_interpolate_prompt:
-            assert num_videos_per_prompt == 1, f"num_videos_per_prompt must be 1, got {num_videos_per_prompt}"
+            assert (
+                num_videos_per_prompt == 1
+            ), f"num_videos_per_prompt must be 1, got {num_videos_per_prompt}"
             assert isinstance(prompt, list), "prompt must be a list"
-            assert len(prompt) == len(interpolate_time_list), (
-                f"Length mismatch: {len(prompt)} vs {len(interpolate_time_list)}"
-            )
-            assert min(interpolate_time_list) > interpolation_steps, (
-                f"Minimum value {min(interpolate_time_list)} must be greater than {interpolation_steps}"
-            )
+            assert len(prompt) == len(
+                interpolate_time_list
+            ), f"Length mismatch: {len(prompt)} vs {len(interpolate_time_list)}"
+            assert (
+                min(interpolate_time_list) > interpolation_steps
+            ), f"Minimum value {min(interpolate_time_list)} must be greater than {interpolation_steps}"
 
         if guidance_scale > 1.0 and self.config.is_distilled:
-            logger.warning(f"Guidance scale {guidance_scale} is ignored for step-wise distilled models.")
+            logger.warning(
+                f"Guidance scale {guidance_scale} is ignored for step-wise distilled models."
+            )
 
     def prepare_latents(
         self,
@@ -441,12 +484,20 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
             latents = self.vae.encode(image).latent_dist.sample(generator=generator)
             latents = (latents - latents_mean) * latents_std
         if fake_latents is None:
-            min_frames = (num_latent_frames_per_chunk - 1) * self.vae_scale_factor_temporal + 1
-            fake_video = image.repeat(1, 1, min_frames, 1, 1).to(device=device, dtype=self.vae.dtype)
-            fake_latents_full = self.vae.encode(fake_video).latent_dist.sample(generator=generator)
+            min_frames = (
+                num_latent_frames_per_chunk - 1
+            ) * self.vae_scale_factor_temporal + 1
+            fake_video = image.repeat(1, 1, min_frames, 1, 1).to(
+                device=device, dtype=self.vae.dtype
+            )
+            fake_latents_full = self.vae.encode(fake_video).latent_dist.sample(
+                generator=generator
+            )
             fake_latents_full = (fake_latents_full - latents_mean) * latents_std
             fake_latents = fake_latents_full[:, :, -1:, :, :]
-        return latents.to(device=device, dtype=dtype), fake_latents.to(device=device, dtype=dtype)
+        return latents.to(device=device, dtype=dtype), fake_latents.to(
+            device=device, dtype=dtype
+        )
 
     def prepare_video_latents(
         self,
@@ -463,7 +514,9 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
         video = video.to(device=device, dtype=self.vae.dtype)
         if latents is None:
             num_frames = video.shape[2]
-            min_frames = (num_latent_frames_per_chunk - 1) * self.vae_scale_factor_temporal + 1
+            min_frames = (
+                num_latent_frames_per_chunk - 1
+            ) * self.vae_scale_factor_temporal + 1
             num_chunks = num_frames // min_frames
             if num_chunks == 0:
                 raise ValueError(
@@ -475,7 +528,9 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
             start_frame = num_frames - total_valid_frames
 
             first_frame = video[:, :, 0:1, :, :]
-            first_frame_latent = self.vae.encode(first_frame).latent_dist.sample(generator=generator)
+            first_frame_latent = self.vae.encode(first_frame).latent_dist.sample(
+                generator=generator
+            )
             first_frame_latent = (first_frame_latent - latents_mean) * latents_std
 
             latents_chunks = []
@@ -483,11 +538,15 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
                 chunk_start = start_frame + i * min_frames
                 chunk_end = chunk_start + min_frames
                 video_chunk = video[:, :, chunk_start:chunk_end, :, :]
-                chunk_latents = self.vae.encode(video_chunk).latent_dist.sample(generator=generator)
+                chunk_latents = self.vae.encode(video_chunk).latent_dist.sample(
+                    generator=generator
+                )
                 chunk_latents = (chunk_latents - latents_mean) * latents_std
                 latents_chunks.append(chunk_latents)
             latents = torch.cat(latents_chunks, dim=2)
-        return first_frame_latent.to(device=device, dtype=dtype), latents.to(device=device, dtype=dtype)
+        return first_frame_latent.to(device=device, dtype=dtype), latents.to(
+            device=device, dtype=dtype
+        )
 
     def interpolate_prompt_embeds(
         self,
@@ -498,7 +557,10 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
         x = torch.lerp(
             prompt_embeds_1,
             prompt_embeds_2,
-            torch.linspace(0, 1, steps=interpolation_steps).unsqueeze(1).unsqueeze(2).to(prompt_embeds_1),
+            torch.linspace(0, 1, steps=interpolation_steps)
+            .unsqueeze(1)
+            .unsqueeze(2)
+            .to(prompt_embeds_1),
         )
         interpolated_prompt_embeds = list(x.chunk(interpolation_steps, dim=0))
         return interpolated_prompt_embeds
@@ -514,9 +576,7 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
         device: torch.device | None = None,
         generator: torch.Generator | None = None,
     ):
-        # NOTE: A generator must be provided to ensure correct and reproducible results.
-        # Creating a default generator here is a fallback only — without a fixed seed,
-        # the output will be non-deterministic and may produce incorrect results in CP context.
+        # The default generator is independent of the trajectory RNG.
         if generator is None:
             generator = torch.Generator(device=device)
         elif isinstance(generator, list):
@@ -531,15 +591,25 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
             - torch.ones(block_size, block_size, device=device) * gamma
         )
         cov += torch.eye(block_size, device=device) * 1e-8
-        cov = cov.float()  # Upcast to fp32 for numerical stability — cholesky is unreliable in fp16/bf16.
+        cov = (
+            cov.float()
+        )  # Upcast to fp32 for numerical stability — cholesky is unreliable in fp16/bf16.
 
         L = torch.linalg.cholesky(cov)
-        block_number = batch_size * channel * num_frames * (height // ph) * (width // pw)
-        z = torch.randn(block_number, block_size, generator=generator, device=generator.device).to(device=device)
+        block_number = (
+            batch_size * channel * num_frames * (height // ph) * (width // pw)
+        )
+        z = torch.randn(
+            block_number, block_size, generator=generator, device=generator.device
+        ).to(device=device)
         noise = z @ L.T
 
-        noise = noise.view(batch_size, channel, num_frames, height // ph, width // pw, ph, pw)
-        noise = noise.permute(0, 1, 2, 3, 5, 4, 6).reshape(batch_size, channel, num_frames, height, width)
+        noise = noise.view(
+            batch_size, channel, num_frames, height // ph, width // pw, ph, pw
+        )
+        noise = noise.permute(0, 1, 2, 3, 5, 4, 6).reshape(
+            batch_size, channel, num_frames, height, width
+        )
 
         return noise
 
@@ -566,7 +636,12 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
         use_zero_init: bool | None = True,
         zero_steps: int | None = 1,
         # ------------ Callback ------------
-        callback_on_step_end: Callable[[int, int], None] | PipelineCallback | MultiPipelineCallbacks | None = None,
+        callback_on_step_end: (
+            Callable[[int, int], None]
+            | PipelineCallback
+            | MultiPipelineCallbacks
+            | None
+        ) = None,
         callback_on_step_end_tensor_inputs: list[str] = ["latents"],
         progress_bar=None,
     ):
@@ -606,7 +681,9 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
                         indices_latents_history_short=indices_latents_history_short,
                         indices_latents_history_mid=indices_latents_history_mid,
                         indices_latents_history_long=indices_latents_history_long,
-                        latents_history_short=latents_history_short.to(transformer_dtype),
+                        latents_history_short=latents_history_short.to(
+                            transformer_dtype
+                        ),
                         latents_history_mid=latents_history_mid.to(transformer_dtype),
                         latents_history_long=latents_history_long.to(transformer_dtype),
                         attention_kwargs=attention_kwargs,
@@ -619,15 +696,21 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
                     negative_flat = noise_uncond.view(batch_size, -1)
 
                     alpha = optimized_scale(positive_flat, negative_flat)
-                    alpha = alpha.view(batch_size, *([1] * (len(noise_pred_text.shape) - 1)))
+                    alpha = alpha.view(
+                        batch_size, *([1] * (len(noise_pred_text.shape) - 1))
+                    )
                     alpha = alpha.to(noise_pred_text.dtype)
 
                     if (i <= zero_steps) and use_zero_init:
                         noise_pred = noise_pred_text * 0.0
                     else:
-                        noise_pred = noise_uncond * alpha + guidance_scale * (noise_pred_text - noise_uncond * alpha)
+                        noise_pred = noise_uncond * alpha + guidance_scale * (
+                            noise_pred_text - noise_uncond * alpha
+                        )
                 else:
-                    noise_pred = noise_uncond + guidance_scale * (noise_pred - noise_uncond)
+                    noise_pred = noise_uncond + guidance_scale * (
+                        noise_pred - noise_uncond
+                    )
 
             latents = self.scheduler.step(
                 noise_pred,
@@ -644,195 +727,17 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
 
                 latents = callback_outputs.pop("latents", latents)
                 prompt_embeds = callback_outputs.pop("prompt_embeds", prompt_embeds)
-                negative_prompt_embeds = callback_outputs.pop("negative_prompt_embeds", negative_prompt_embeds)
+                negative_prompt_embeds = callback_outputs.pop(
+                    "negative_prompt_embeds", negative_prompt_embeds
+                )
 
-            if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
+            if i == len(timesteps) - 1 or (
+                (i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0
+            ):
                 progress_bar.update()
 
             if XLA_AVAILABLE:
                 xm.mark_step()
-
-        return latents
-
-    def stage2_sample(
-        self,
-        latents: torch.Tensor = None,
-        pyramid_num_stages: int = None,
-        pyramid_num_inference_steps_list: list[int] = None,
-        prompt_embeds: torch.Tensor = None,
-        negative_prompt_embeds: torch.Tensor = None,
-        guidance_scale: float | None = 5.0,
-        indices_hidden_states: torch.Tensor = None,
-        indices_latents_history_short: torch.Tensor = None,
-        indices_latents_history_mid: torch.Tensor = None,
-        indices_latents_history_long: torch.Tensor = None,
-        latents_history_short: torch.Tensor = None,
-        latents_history_mid: torch.Tensor = None,
-        latents_history_long: torch.Tensor = None,
-        attention_kwargs: dict | None = None,
-        device: torch.device | None = None,
-        transformer_dtype: torch.dtype = None,
-        generator: torch.Generator | None = None,
-        # ------------ CFG Zero ------------
-        use_zero_init: bool | None = True,
-        zero_steps: int | None = 1,
-        # -------------- DMD --------------
-        is_amplify_first_chunk: bool = False,
-        # ------------ Callback ------------
-        callback_on_step_end: Callable[[int, int], None] | PipelineCallback | MultiPipelineCallbacks | None = None,
-        callback_on_step_end_tensor_inputs: list[str] = ["latents"],
-        progress_bar=None,
-    ):
-        batch_size, num_channel, num_frames, height, width = latents.shape
-        latents = latents.permute(0, 2, 1, 3, 4).reshape(batch_size * num_frames, num_channel, height, width)
-        for _ in range(pyramid_num_stages - 1):
-            height //= 2
-            width //= 2
-            latents = (
-                F.interpolate(
-                    latents,
-                    size=(height, width),
-                    mode="bilinear",
-                )
-                * 2
-            )
-        latents = latents.reshape(batch_size, num_frames, num_channel, height, width).permute(0, 2, 1, 3, 4)
-
-        batch_size = latents.shape[0]
-        start_point_list = None
-        if self.config.is_distilled:
-            start_point_list = [latents]
-
-        i = 0
-        for i_s in range(pyramid_num_stages):
-            patch_size = self.transformer.config.patch_size
-            image_seq_len = (latents.shape[-1] * latents.shape[-2] * latents.shape[-3]) // (
-                patch_size[0] * patch_size[1] * patch_size[2]
-            )
-            mu = calculate_shift(
-                image_seq_len,
-                self.scheduler.config.get("base_image_seq_len", 256),
-                self.scheduler.config.get("max_image_seq_len", 4096),
-                self.scheduler.config.get("base_shift", 0.5),
-                self.scheduler.config.get("max_shift", 1.15),
-            )
-            self.scheduler.set_timesteps(
-                pyramid_num_inference_steps_list[i_s],
-                i_s,
-                device=device,
-                mu=mu,
-                is_amplify_first_chunk=is_amplify_first_chunk,
-            )
-            timesteps = self.scheduler.timesteps
-
-            if i_s > 0:
-                height *= 2
-                width *= 2
-                num_frames = latents.shape[2]
-                latents = latents.permute(0, 2, 1, 3, 4).reshape(
-                    batch_size * num_frames, num_channel, height // 2, width // 2
-                )
-                latents = F.interpolate(latents, size=(height, width), mode="nearest")
-                latents = latents.reshape(batch_size, num_frames, num_channel, height, width).permute(0, 2, 1, 3, 4)
-                # Fix the stage
-                ori_sigma = 1 - self.scheduler.ori_start_sigmas[i_s]  # the original coeff of signal
-                gamma = self.scheduler.config.gamma
-                alpha = 1 / (math.sqrt(1 + (1 / gamma)) * (1 - ori_sigma) + ori_sigma)
-                beta = alpha * (1 - ori_sigma) / math.sqrt(gamma)
-
-                batch_size, channel, num_frames, height, width = latents.shape
-                noise = self.sample_block_noise(
-                    batch_size, channel, num_frames, height, width, patch_size, device, generator
-                )
-                noise = noise.to(device=device, dtype=transformer_dtype)
-                latents = alpha * latents + beta * noise  # To fix the block artifact
-
-                if self.config.is_distilled:
-                    start_point_list.append(latents)
-
-            for idx, t in enumerate(timesteps):
-                timestep = t.expand(latents.shape[0]).to(torch.int64)
-
-                with self.transformer.cache_context("cond"):
-                    noise_pred = self.transformer(
-                        hidden_states=latents.to(transformer_dtype),
-                        timestep=timestep,
-                        encoder_hidden_states=prompt_embeds,
-                        attention_kwargs=attention_kwargs,
-                        return_dict=False,
-                        indices_hidden_states=indices_hidden_states,
-                        indices_latents_history_short=indices_latents_history_short,
-                        indices_latents_history_mid=indices_latents_history_mid,
-                        indices_latents_history_long=indices_latents_history_long,
-                        latents_history_short=latents_history_short.to(transformer_dtype),
-                        latents_history_mid=latents_history_mid.to(transformer_dtype),
-                        latents_history_long=latents_history_long.to(transformer_dtype),
-                    )[0]
-
-                if self.do_classifier_free_guidance:
-                    with self.transformer.cache_context("uncond"):
-                        noise_uncond = self.transformer(
-                            hidden_states=latents.to(transformer_dtype),
-                            timestep=timestep,
-                            encoder_hidden_states=negative_prompt_embeds,
-                            attention_kwargs=attention_kwargs,
-                            return_dict=False,
-                            indices_hidden_states=indices_hidden_states,
-                            indices_latents_history_short=indices_latents_history_short,
-                            indices_latents_history_mid=indices_latents_history_mid,
-                            indices_latents_history_long=indices_latents_history_long,
-                            latents_history_short=latents_history_short.to(transformer_dtype),
-                            latents_history_mid=latents_history_mid.to(transformer_dtype),
-                            latents_history_long=latents_history_long.to(transformer_dtype),
-                        )[0]
-
-                    if self.config.is_cfg_zero_star:
-                        noise_pred_text = noise_pred
-                        positive_flat = noise_pred_text.view(batch_size, -1)
-                        negative_flat = noise_uncond.view(batch_size, -1)
-
-                        alpha = optimized_scale(positive_flat, negative_flat)
-                        alpha = alpha.view(batch_size, *([1] * (len(noise_pred_text.shape) - 1)))
-                        alpha = alpha.to(noise_pred_text.dtype)
-
-                        if (i_s == 0 and idx <= zero_steps) and use_zero_init:
-                            noise_pred = noise_pred_text * 0.0
-                        else:
-                            noise_pred = noise_uncond * alpha + guidance_scale * (
-                                noise_pred_text - noise_uncond * alpha
-                            )
-                    else:
-                        noise_pred = noise_uncond + guidance_scale * (noise_pred - noise_uncond)
-
-                latents = self.scheduler.step(
-                    noise_pred,
-                    t,
-                    latents,
-                    generator=generator,
-                    return_dict=False,
-                    cur_sampling_step=idx,
-                    dmd_noisy_tensor=start_point_list[i_s] if start_point_list is not None else None,
-                    dmd_sigmas=self.scheduler.sigmas,
-                    dmd_timesteps=self.scheduler.timesteps,
-                    all_timesteps=timesteps,
-                )[0]
-
-                if callback_on_step_end is not None:
-                    callback_kwargs = {}
-                    for k in callback_on_step_end_tensor_inputs:
-                        callback_kwargs[k] = locals()[k]
-                    callback_outputs = callback_on_step_end(self, i, t, callback_kwargs)
-
-                    latents = callback_outputs.pop("latents", latents)
-                    prompt_embeds = callback_outputs.pop("prompt_embeds", prompt_embeds)
-                    negative_prompt_embeds = callback_outputs.pop("negative_prompt_embeds", negative_prompt_embeds)
-
-                progress_bar.update()
-
-                if XLA_AVAILABLE:
-                    xm.mark_step()
-
-                i += 1
 
         return latents
 
@@ -880,7 +785,12 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
         output_type: str | None = "np",
         return_dict: bool = True,
         attention_kwargs: dict[str, Any] | None = None,
-        callback_on_step_end: Callable[[int, int], None] | PipelineCallback | MultiPipelineCallbacks | None = None,
+        callback_on_step_end: (
+            Callable[[int, int], None]
+            | PipelineCallback
+            | MultiPipelineCallbacks
+            | None
+        ) = None,
         callback_on_step_end_tensor_inputs: list[str] = ["latents"],
         callback_on_chunk_end: Callable[[int, torch.Tensor], None] | None = None,
         callback_on_chunk_state: Callable[[int, dict[str, Any]], None] | None = None,
@@ -1002,7 +912,9 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
         elif camera_trajectory is not None and is_enable_stage2:
             raise ValueError("Base camera inference requires stage1 sampling")
         if memory_size != 4:
-            raise ValueError(f"RepEncoder memory contract requires memory_size=4, got {memory_size}")
+            raise ValueError(
+                f"RepEncoder memory contract requires memory_size=4, got {memory_size}"
+            )
         if num_latent_frames_per_chunk != 9:
             raise ValueError(
                 "RepEncoder target slots [2,4,6,8] require num_latent_frames_per_chunk=9, "
@@ -1014,22 +926,23 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
         ) * self.vae_scale_factor_temporal + 1
         requested_num_chunks = max(
             1,
-            (max(num_frames, 1) + requested_window_num_frames - 1) // requested_window_num_frames,
+            (max(num_frames, 1) + requested_window_num_frames - 1)
+            // requested_window_num_frames,
         )
         if use_interpolate_prompt:
             requested_num_chunks = max(requested_num_chunks, sum(interpolate_time_list))
         if requested_num_chunks > 1:
             if camera_trajectory is None:
-                raise ValueError("Multi-chunk RepEncoder inference requires a global metric camera trajectory")
-            if memory_provider is None:
                 raise ValueError(
-                    "Multi-chunk inference requires memory_provider"
+                    "Multi-chunk RepEncoder inference requires a global metric camera trajectory"
                 )
+            if memory_provider is None:
+                raise ValueError("Multi-chunk inference requires memory_provider")
 
         history_sizes = sorted(history_sizes, reverse=True)  # From big to small
-        assert memory_size <= num_latent_frames_per_chunk, (
-            f"memory_size={memory_size} must be <= num_latent_frames_per_chunk={num_latent_frames_per_chunk}"
-        )
+        assert (
+            memory_size <= num_latent_frames_per_chunk
+        ), f"memory_size={memory_size} must be <= num_latent_frames_per_chunk={num_latent_frames_per_chunk}"
 
         if isinstance(callback_on_step_end, (PipelineCallback, MultiPipelineCallbacks)):
             callback_on_step_end_tensor_inputs = callback_on_step_end.tensor_inputs
@@ -1067,9 +980,9 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
             .view(1, self.vae.config.z_dim, 1, 1, 1)
             .to(device, self.vae.dtype)
         )
-        latents_std = 1.0 / torch.tensor(self.vae.config.latents_std).view(1, self.vae.config.z_dim, 1, 1, 1).to(
-            device, self.vae.dtype
-        )
+        latents_std = 1.0 / torch.tensor(self.vae.config.latents_std).view(
+            1, self.vae.config.z_dim, 1, 1, 1
+        ).to(device, self.vae.dtype)
 
         # 2. Define call parameters
         if use_interpolate_prompt or (prompt is not None and isinstance(prompt, str)):
@@ -1120,24 +1033,32 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
 
         if image_latents is not None and add_noise_to_image_latents:
             image_noise_sigma = (
-                torch.rand(1, device=device, generator=generator) * (image_noise_sigma_max - image_noise_sigma_min)
+                torch.rand(1, device=device, generator=generator)
+                * (image_noise_sigma_max - image_noise_sigma_min)
                 + image_noise_sigma_min
             )
             image_latents = (
-                image_noise_sigma * randn_tensor(image_latents.shape, generator=generator, device=device)
+                image_noise_sigma
+                * randn_tensor(image_latents.shape, generator=generator, device=device)
                 + (1 - image_noise_sigma) * image_latents
             )
             fake_image_noise_sigma = (
-                torch.rand(1, device=device, generator=generator) * (video_noise_sigma_max - video_noise_sigma_min)
+                torch.rand(1, device=device, generator=generator)
+                * (video_noise_sigma_max - video_noise_sigma_min)
                 + video_noise_sigma_min
             )
             fake_image_latents = (
-                fake_image_noise_sigma * randn_tensor(fake_image_latents.shape, generator=generator, device=device)
+                fake_image_noise_sigma
+                * randn_tensor(
+                    fake_image_latents.shape, generator=generator, device=device
+                )
                 + (1 - fake_image_noise_sigma) * fake_image_latents
             )
 
         if video is not None:
-            video = self.video_processor.preprocess_video(video, height=height, width=width)
+            video = self.video_processor.preprocess_video(
+                video, height=height, width=width
+            )
             image_latents, video_latents = self.prepare_video_latents(
                 video,
                 latents_mean=latents_mean,
@@ -1151,11 +1072,13 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
 
         if video_latents is not None and add_noise_to_video_latents:
             image_noise_sigma = (
-                torch.rand(1, device=device, generator=generator) * (image_noise_sigma_max - image_noise_sigma_min)
+                torch.rand(1, device=device, generator=generator)
+                * (image_noise_sigma_max - image_noise_sigma_min)
                 + image_noise_sigma_min
             )
             image_latents = (
-                image_noise_sigma * randn_tensor(image_latents.shape, generator=generator, device=device)
+                image_noise_sigma
+                * randn_tensor(image_latents.shape, generator=generator, device=device)
                 + (1 - image_noise_sigma) * image_latents
             )
 
@@ -1175,7 +1098,10 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
                 frame_sigmas = frame_sigmas.view(1, 1, chunk_frames, 1, 1)
 
                 noisy_chunk = (
-                    frame_sigmas * randn_tensor(latent_chunk.shape, generator=generator, device=device)
+                    frame_sigmas
+                    * randn_tensor(
+                        latent_chunk.shape, generator=generator, device=device
+                    )
                     + (1 - frame_sigmas) * latent_chunk
                 )
                 noisy_latents_chunks.append(noisy_chunk)
@@ -1183,8 +1109,12 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
 
         # 5. Prepare latent variables
         num_channels_latents = self.transformer.config.in_channels
-        window_num_frames = (num_latent_frames_per_chunk - 1) * self.vae_scale_factor_temporal + 1
-        num_latent_chunk = max(1, (num_frames + window_num_frames - 1) // window_num_frames)
+        window_num_frames = (
+            num_latent_frames_per_chunk - 1
+        ) * self.vae_scale_factor_temporal + 1
+        num_latent_chunk = max(
+            1, (num_frames + window_num_frames - 1) // window_num_frames
+        )
         history_video = None
         total_generated_latent_frames = 0
 
@@ -1207,7 +1137,9 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
             video_frames = video_latents.shape[2]
             if video_frames < history_frames:
                 keep_frames = history_frames - video_frames
-                history_latents = torch.cat([history_latents[:, :, :keep_frames, :, :], video_latents], dim=2)
+                history_latents = torch.cat(
+                    [history_latents[:, :, :keep_frames, :, :], video_latents], dim=2
+                )
             else:
                 history_latents = video_latents
             total_generated_latent_frames += video_latents.shape[2]
@@ -1259,9 +1191,13 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
                     raise ValueError("resume state is missing fixed image_latents")
                 image_latents = None
             else:
-                image_latents = saved_image_latents.to(device=device, dtype=torch.float32)
+                image_latents = saved_image_latents.to(
+                    device=device, dtype=torch.float32
+                )
             if not isinstance(generator, torch.Generator):
-                raise TypeError("resumable WorldCrafter inference requires one torch.Generator")
+                raise TypeError(
+                    "resumable WorldCrafter inference requires one torch.Generator"
+                )
             generator.set_state(resume_state["generator_state"].cpu())
             total_generated_latent_frames = expected_generated
 
@@ -1285,7 +1221,11 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
                 * (width // self.vae_scale_factor_spatial)
                 // (patch_size[0] * patch_size[1] * patch_size[2])
             )
-            sigmas = np.linspace(0.999, 0.0, num_inference_steps + 1)[:-1] if sigmas is None else sigmas
+            sigmas = (
+                np.linspace(0.999, 0.0, num_inference_steps + 1)[:-1]
+                if sigmas is None
+                else sigmas
+            )
             mu = calculate_shift(
                 image_seq_len,
                 self.scheduler.config.get("base_image_seq_len", 256),
@@ -1307,21 +1247,32 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
                 if current_interval_idx == 0:
                     prompt_embeds = all_prompt_embeds[0].unsqueeze(0)
                 else:
-                    interval_start = interpolate_cumulative_list[current_interval_idx - 1]
+                    interval_start = interpolate_cumulative_list[
+                        current_interval_idx - 1
+                    ]
                     position_in_interval = k - interval_start
 
                     if position_in_interval < interpolation_steps:
-                        if interpolate_embeds is None or interpolate_interval_idx != current_interval_idx:
+                        if (
+                            interpolate_embeds is None
+                            or interpolate_interval_idx != current_interval_idx
+                        ):
                             interpolate_embeds = self.interpolate_prompt_embeds(
-                                prompt_embeds_1=all_prompt_embeds[current_interval_idx - 1].unsqueeze(0),
-                                prompt_embeds_2=all_prompt_embeds[current_interval_idx].unsqueeze(0),
+                                prompt_embeds_1=all_prompt_embeds[
+                                    current_interval_idx - 1
+                                ].unsqueeze(0),
+                                prompt_embeds_2=all_prompt_embeds[
+                                    current_interval_idx
+                                ].unsqueeze(0),
                                 interpolation_steps=interpolation_steps,
                             )
                             interpolate_interval_idx = current_interval_idx
 
                         prompt_embeds = interpolate_embeds[position_in_interval]
                     else:
-                        prompt_embeds = all_prompt_embeds[current_interval_idx].unsqueeze(0)
+                        prompt_embeds = all_prompt_embeds[
+                            current_interval_idx
+                        ].unsqueeze(0)
             else:
                 prompt_embeds = all_prompt_embeds
 
@@ -1358,64 +1309,112 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
                         dtype=torch.float32,
                     )
                     if fake_image_latents is not None:
-                        history_latents_first_chunk = torch.cat([history_latents_first_chunk, fake_image_latents], dim=2)
+                        history_latents_first_chunk = torch.cat(
+                            [history_latents_first_chunk, fake_image_latents], dim=2
+                        )
                     if video_latents is not None:
                         history_frames = history_latents_first_chunk.shape[2]
                         video_frames = video_latents.shape[2]
                         if video_frames < history_frames:
                             keep_frames = history_frames - video_frames
                             history_latents_first_chunk = torch.cat(
-                                [history_latents_first_chunk[:, :, :keep_frames, :, :], video_latents], dim=2
+                                [
+                                    history_latents_first_chunk[
+                                        :, :, :keep_frames, :, :
+                                    ],
+                                    video_latents,
+                                ],
+                                dim=2,
                             )
                         else:
                             history_latents_first_chunk = video_latents
 
-                    indices = torch.arange(0, sum([1, memory_size, *history_sizes, num_latent_frames_per_chunk]))
+                    indices = torch.arange(
+                        0,
+                        sum(
+                            [
+                                1,
+                                memory_size,
+                                *history_sizes,
+                                num_latent_frames_per_chunk,
+                            ]
+                        ),
+                    )
                     (
                         indices_prefix,
                         indices_latents_memory,
                         indices_latents_history_mid,
                         indices_latents_history_1x,
                         indices_hidden_states,
-                    ) = indices.split([1, memory_size, *history_sizes, num_latent_frames_per_chunk], dim=0)
-                    indices_latents_history_short = torch.cat([indices_prefix, indices_latents_history_1x], dim=0)
+                    ) = indices.split(
+                        [1, memory_size, *history_sizes, num_latent_frames_per_chunk],
+                        dim=0,
+                    )
+                    indices_latents_history_short = torch.cat(
+                        [indices_prefix, indices_latents_history_1x], dim=0
+                    )
 
                     latents_memory = first_memory_latents
-                    latents_prefix, latents_history_mid, latents_history_1x = history_latents_first_chunk[
-                        :, :, -sum(history_sizes_first_chunk) :
-                    ].split(history_sizes_first_chunk, dim=2)
+                    latents_prefix, latents_history_mid, latents_history_1x = (
+                        history_latents_first_chunk[
+                            :, :, -sum(history_sizes_first_chunk) :
+                        ].split(history_sizes_first_chunk, dim=2)
+                    )
                     if image_latents is not None:
                         latents_prefix = image_latents
-                    latents_history_short = torch.cat([latents_prefix, latents_history_1x], dim=2)
+                    latents_history_short = torch.cat(
+                        [latents_prefix, latents_history_1x], dim=2
+                    )
                 else:
-                    indices = torch.arange(0, sum([1, memory_size, *history_sizes, num_latent_frames_per_chunk]))
+                    indices = torch.arange(
+                        0,
+                        sum(
+                            [
+                                1,
+                                memory_size,
+                                *history_sizes,
+                                num_latent_frames_per_chunk,
+                            ]
+                        ),
+                    )
                     (
                         indices_prefix,
                         indices_latents_memory,
                         indices_latents_history_mid,
                         indices_latents_history_1x,
                         indices_hidden_states,
-                    ) = indices.split([1, memory_size, *history_sizes, num_latent_frames_per_chunk], dim=0)
-                    indices_latents_history_short = torch.cat([indices_prefix, indices_latents_history_1x], dim=0)
+                    ) = indices.split(
+                        [1, memory_size, *history_sizes, num_latent_frames_per_chunk],
+                        dim=0,
+                    )
+                    indices_latents_history_short = torch.cat(
+                        [indices_prefix, indices_latents_history_1x], dim=0
+                    )
 
                     latents_prefix = image_latents
                     latents_memory = first_memory_latents
-                    latents_history_mid, latents_history_1x = history_latents[:, :, -sum(history_sizes) :].split(
-                        history_sizes, dim=2
+                    latents_history_mid, latents_history_1x = history_latents[
+                        :, :, -sum(history_sizes) :
+                    ].split(history_sizes, dim=2)
+                    latents_history_short = torch.cat(
+                        [latents_prefix, latents_history_1x], dim=2
                     )
-                    latents_history_short = torch.cat([latents_prefix, latents_history_1x], dim=2)
             else:
-                indices = torch.arange(0, sum([memory_size, *history_sizes, num_latent_frames_per_chunk]))
+                indices = torch.arange(
+                    0, sum([memory_size, *history_sizes, num_latent_frames_per_chunk])
+                )
                 (
                     indices_latents_memory,
                     indices_latents_history_mid,
                     indices_latents_history_short,
                     indices_hidden_states,
-                ) = indices.split([memory_size, *history_sizes, num_latent_frames_per_chunk], dim=0)
-                latents_memory = first_memory_latents
-                latents_history_mid, latents_history_short = history_latents[:, :, -sum(history_sizes) :].split(
-                    history_sizes, dim=2
+                ) = indices.split(
+                    [memory_size, *history_sizes, num_latent_frames_per_chunk], dim=0
                 )
+                latents_memory = first_memory_latents
+                latents_history_mid, latents_history_short = history_latents[
+                    :, :, -sum(history_sizes) :
+                ].split(history_sizes, dim=2)
 
             indices_hidden_states = indices_hidden_states.unsqueeze(0)
             indices_latents_history_short = indices_latents_history_short.unsqueeze(0)
@@ -1435,16 +1434,26 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
             )
 
             if not is_enable_stage2:
-                self.scheduler.set_timesteps(num_inference_steps, device=device, sigmas=sigmas, mu=mu)
+                self.scheduler.set_timesteps(
+                    num_inference_steps, device=device, sigmas=sigmas, mu=mu
+                )
                 timesteps = self.scheduler.timesteps
-                num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
+                num_warmup_steps = (
+                    len(timesteps) - num_inference_steps * self.scheduler.order
+                )
                 self._num_timesteps = len(timesteps)
             else:
                 if use_fast:
                     from ..fast.contract import resolve_dmd_inference_trace
+
                     num_inference_steps = resolve_dmd_inference_trace(
-                        self.dmd_timestep_contract, latent_shape=latents.shape[1:],
-                        history_tensors=(latents_history_short, latents_history_mid, latents_memory),
+                        self.dmd_timestep_contract,
+                        latent_shape=latents.shape[1:],
+                        history_tensors=(
+                            latents_history_short,
+                            latents_history_mid,
+                            latents_memory,
+                        ),
                         num_stages=pyramid_num_stages,
                     ).num_steps
                 else:
@@ -1469,36 +1478,18 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
                             "check pose length and camera adapter patching"
                         )
                     current_attention_kwargs.update(ucpe_attention_kwargs)
-                    camera_inputs = ucpe_attention_kwargs["camera_control_ucpe_input"]
-                    print(
-                        "[ucpe-camera-inference-audit] "
-                        + json.dumps(
-                            {
-                                "cam_emb_shape": list(camera_inputs["cam_emb"].shape),
-                                "cam_emb_dtype": str(camera_inputs["cam_emb"].dtype).removeprefix("torch."),
-                                "camera_active": True,
-                                "chunk_index": int(k),
-                                "pipeline": "diffusers",
-                                "pose_semantics": "chunk_relative_from_global_metric_c2w",
-                                "use_zero_init": bool(use_zero_init),
-                                "viewmats_shape": list(camera_inputs["viewmats"].shape),
-                                "viewmats_dtype": str(camera_inputs["viewmats"].dtype).removeprefix("torch."),
-                            },
-                            sort_keys=True,
-                        ),
-                        flush=True,
-                    )
                 if is_enable_stage2:
                     from ..fast.sampling import sample_fast
+
                     # Upsample block noise uses a separate default generator.
                     # Forwarding the trajectory generator here changes its RNG
                     # consumption and the generated video.
-                    latents = sample_fast(self,
+                    latents = sample_fast(
+                        self,
                         latents=latents,
                         pyramid_num_stages=pyramid_num_stages,
                         pyramid_num_inference_steps_list=pyramid_num_inference_steps_list,
                         prompt_embeds=prompt_embeds,
-                        negative_prompt_embeds=negative_prompt_embeds,
                         guidance_scale=guidance_scale,
                         indices_hidden_states=indices_hidden_states,
                         indices_latents_history_short=indices_latents_history_short,
@@ -1510,16 +1501,11 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
                         attention_kwargs=current_attention_kwargs,
                         device=device,
                         transformer_dtype=transformer_dtype,
-                        # ------------ CFG Zero ------------
-                        use_zero_init=use_zero_init,
-                        zero_steps=zero_steps,
-                        # -------------- DMD --------------
                         camera_trajectory=camera_trajectory,
                         num_latent_frames_per_chunk=num_latent_frames_per_chunk,
                         chunk_index=k,
                         camera_restart_each_chunk=False,
                         ucpe_pixel_center=True,
-                        # ------------ Callback ------------
                         callback_on_step_end=callback_on_step_end,
                         callback_on_step_end_tensor_inputs=callback_on_step_end_tensor_inputs,
                         progress_bar=progress_bar,
@@ -1553,17 +1539,25 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
                     )
 
                 if keep_first_frame and (
-                    (is_first_chunk and image_latents is None) or (is_skip_first_chunk and is_second_chunk)
+                    (is_first_chunk and image_latents is None)
+                    or (is_skip_first_chunk and is_second_chunk)
                 ):
                     image_latents = latents[:, :, 0:1, :, :]
 
-                generated_memory_latents = torch.cat([generated_memory_latents, latents], dim=2)
+                generated_memory_latents = torch.cat(
+                    [generated_memory_latents, latents], dim=2
+                )
 
                 total_generated_latent_frames += latents.shape[2]
                 history_latents = torch.cat([history_latents, latents], dim=2)
-                real_history_latents = history_latents[:, :, -total_generated_latent_frames:]
+                real_history_latents = history_latents[
+                    :, :, -total_generated_latent_frames:
+                ]
                 current_latents = (
-                    real_history_latents[:, :, -num_latent_frames_per_chunk:].to(vae_dtype) / latents_std
+                    real_history_latents[:, :, -num_latent_frames_per_chunk:].to(
+                        vae_dtype
+                    )
+                    / latents_std
                     + latents_mean
                 )
                 current_video = self.vae.decode(current_latents, return_dict=False)[0]
@@ -1573,7 +1567,9 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
 
                 if callback_on_chunk_state is not None:
                     if not isinstance(generator, torch.Generator):
-                        raise TypeError("resumable WorldCrafter inference requires one torch.Generator")
+                        raise TypeError(
+                            "resumable WorldCrafter inference requires one torch.Generator"
+                        )
                     callback_on_chunk_state(
                         k,
                         {
@@ -1583,9 +1579,13 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
                             "generated_memory_latents": generated_memory_latents.detach().cpu(),
                             "history_latents": history_latents[
                                 :, :, -sum(history_sizes) :
-                            ].detach().cpu(),
+                            ]
+                            .detach()
+                            .cpu(),
                             "image_latents": (
-                                image_latents.detach().cpu() if image_latents is not None else None
+                                image_latents.detach().cpu()
+                                if image_latents is not None
+                                else None
                             ),
                             "generator_state": generator.get_state().cpu(),
                         },
@@ -1607,10 +1607,15 @@ class WorldCrafterPipeline(DiffusionPipeline, _BaseLoraLoaderMixin):
                 # length rule again would drop valid RGB frames (330 -> 329).
                 generated_frames = history_video.size(2)
                 generated_frames = (
-                    generated_frames - 1
-                ) // self.vae_scale_factor_temporal * self.vae_scale_factor_temporal + 1
+                    (generated_frames - 1)
+                    // self.vae_scale_factor_temporal
+                    * self.vae_scale_factor_temporal
+                    + 1
+                )
                 history_video = history_video[:, :, :generated_frames]
-            video = self.video_processor.postprocess_video(history_video, output_type=output_type)
+            video = self.video_processor.postprocess_video(
+                history_video, output_type=output_type
+            )
         else:
             video = real_history_latents
 

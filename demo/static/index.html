@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>WorldCrafter · World Explorer</title>
+    <link rel="stylesheet" href="/static/style.css?v=worldcrafter-layout-1" />
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="/">✳ <b>WorldCrafter</b><span>WORLD EXPLORER</span></a>
+      <div class="connection">
+        <i id="connectionDot"></i><span id="connection">正在连接服务</span>
+      </div>
+    </header>
+    <main>
+      <section class="experience">
+        <div class="section-label">
+          <span>INTERACTIVE WORLD</span>
+        </div>
+        <div
+          id="viewport"
+          tabindex="0"
+          aria-label="交互画面：WASD 移动，Q 上浮 E 下降，方向键转动视角"
+        >
+          <img id="preview" alt="实际输入首帧，640 × 384" /><video
+            id="video0"
+            muted
+            playsinline
+            preload="auto"
+          ></video
+          ><video id="video1" muted playsinline preload="auto"></video>
+          <div id="emptyState">
+            <span class="orb">✳</span>
+            <h1>从一帧，走进世界</h1>
+            <p>选择场景，开始探索</p>
+          </div>
+          <div class="viewport-top">
+            <span id="sceneName">Socrates</span
+            ><span id="playbackLabel">首帧预览</span>
+          </div>
+          <div id="waitLabel">等待下一段 · 保持当前画面</div>
+          <div class="viewport-bottom">
+            <span
+              ><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 ·
+              <kbd>Q</kbd><kbd>E</kbd> 升降</span
+            ><span
+              ><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> 转向
+              <small>Space 暂停/继续</small></span
+            >
+          </div>
+        </div>
+        <div class="transport">
+          <button id="start" class="primary">开始探索 <span>↗</span></button
+          ><button id="pause" disabled>暂停</button
+          ><button id="resume" disabled>继续</button
+          ><button id="reset" disabled>重新开始</button
+          ><button id="stop" disabled>停止</button
+          ><a id="download" class="button" aria-disabled="true">↓ 下载录像</a>
+        </div>
+        <div class="progress-row">
+          <span id="state">准备就绪</span
+          ><span id="progressText">0 / 50 段</span>
+        </div>
+        <div class="progress"><div id="progressBar"></div></div>
+        <div class="metrics">
+          <div>
+            <label>本段生成耗时</label
+            ><strong id="seconds">—<small> s</small></strong>
+          </div>
+          <div>
+            <label>实际生成速度</label
+            ><strong id="fps">—<small> FPS</small></strong>
+          </div>
+          <div>
+            <label>播放帧率</label><strong>10<small> FPS</small></strong>
+          </div>
+        </div>
+        <div class="actions">
+          <div class="action-card">
+            <div id="stepProgress" class="step-segments" role="progressbar"
+              aria-label="当前段生成步数" aria-valuemin="0" aria-valuemax="6" aria-valuenow="0">
+              <i></i><i></i><i></i><i></i><i></i><i></i>
+            </div>
+            <div class="action-content">
+              <label>当前生成动作 <span id="stepCount">0 / 6 步</span></label>
+              <span id="currentAction">等待开始</span>
+            </div>
+          </div>
+          <div>
+            <label>下一段待执行 · 新按键覆盖</label
+            ><span id="nextAction">等待动作输入</span>
+          </div>
+        </div>
+        <p class="footnote">
+          输入动作后才生成，每段 33 帧，以 10 fps 顺序播放。下载录像保持 16 fps；
+          播放帧率不代表实际生成速度。
+        </p>
+        <div id="error" role="alert" hidden></div>
+      </section>
+      <aside>
+        <div class="section-label">YOUR WORLD <span id="presetCount">01 — 06</span></div>
+        <label for="preset">场景预设</label
+        ><select id="preset"></select>
+        <label class="upload" for="upload"
+          ><span>＋ 上传自己的首帧</span
+          ><small>自动中心裁剪为 640 × 384</small></label
+        ><input type="file" id="upload" accept="image/*" hidden />
+        <label for="prompt">世界描述 <span>PROMPT</span></label
+        ><textarea id="prompt" spellcheck="false" rows="9"></textarea>
+        <div class="two-cols">
+          <div>
+            <label for="seed">随机种子</label
+            ><input
+              id="seed"
+              type="number"
+              min="0"
+              max="4294967295"
+              value="42"
+            />
+          </div>
+          <div>
+            <label for="maxChunks">最大段数</label
+            ><input id="maxChunks" type="number" min="1" max="50" value="50" />
+          </div>
+        </div>
+        <hr />
+        <label for="speed"
+          >WASD 移动速度 <span id="speedLabel">1.0 米 / 段</span></label
+        ><input
+          id="speed"
+          type="range"
+          min="0.1"
+          max="5"
+          step="0.1"
+          value="1"
+        />
+        <div class="range-label">
+          <span>慢速探索</span><span>快速移动</span>
+        </div>
+        <label for="verticalSpeed"
+          >Q/E 升降速度 <span id="verticalSpeedLabel">1.0 米 / 段</span></label
+        >
+        <input
+          id="verticalSpeed"
+          type="range"
+          min="0.1"
+          max="5"
+          step="0.1"
+          value="1"
+        />
+        <label for="rotationAngle"
+          >方向键旋转角度 <span id="rotationAngleLabel">15° / 段</span></label
+        >
+        <input
+          id="rotationAngle"
+          type="range"
+          min="1"
+          max="30"
+          step="1"
+          value="15"
+        />
+        <div class="range-label">
+          <span>精细调整 · 1°</span><span>大幅转向 · 30°</span>
+        </div>
+        <div class="control-help">
+          <h3>让视角跟随你</h3>
+          <p>
+            <kbd>W</kbd> 前进 <kbd>S</kbd> 后退<br /><kbd>A</kbd> 左移
+            <kbd>D</kbd> 右移<br /><kbd>Q</kbd> 上浮 <kbd>E</kbd> 下降<br />
+            <kbd>↑</kbd> 抬头 <kbd>↓</kbd> 低头<br /><kbd>←</kbd> 左转
+            <kbd>→</kbd> 右转
+          </p>
+          <p>
+            一段只执行一个按键动作。下一段开始前，新按键随时覆盖旧输入；开始后锁定本段动作。
+            短按生效一段，长按连续生效，没有待执行动作时停止生成。被覆盖的旧键不会自动恢复。
+          </p>
+          <p>
+            Q/E 沿世界竖直方向升降。Esc
+            或切换窗口清空待执行动作。暂停保留当前进度。
+          </p>
+        </div>
+        <div class="config-note">
+          <i></i> 图片驱动 · 实时相机控制<br /><span
+            >选择场景或上传图片，然后使用方向键探索</span
+          >
+        </div>
+      </aside>
+    </main>
+    <footer>
+      <span>WorldCrafter / INTERACTIVE DEMO</span
+      ><span
+        >640 × 384 · PYRAMID 2 / 2 / 2 · SEED
+        <span id="seedFooter">42</span></span
+      >
+    </footer>
+    <script type="module" src="/static/app.js?v=action-gated-10fps-1"></script>
+  </body>
+</html>

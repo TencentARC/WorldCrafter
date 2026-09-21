@@ -10,36 +10,27 @@ try:
     flash_attn3 = get_kernel("kernels-community/flash-attn3")
     flash_attn_func = flash_attn3.flash_attn_func
     flash_attn_varlen_func = flash_attn3.flash_attn_varlen_func
-    print("Flash Attn 3 is installed!")
 except (ImportError, RuntimeError):
     try:
         flash_attn2 = get_kernel("kernels-community/flash-attn2")
         flash_attn_func = flash_attn2.flash_attn_func
         flash_attn_varlen_func = flash_attn2.flash_attn_varlen_func
-        print("Flash Attn 2 is installed!")
     except ImportError:
-        print("Flash Attn 2 / 3 is not installed!")
         flash_attn_varlen_func = None
         flash_attn_func = None
 
 
 try:
-    # raise NotImplementedError
     from sageattention import sageattn, sageattn_varlen
 
-    print("Sage Attn is installed!")
 except ImportError:
-    print("Sage Attn is not installed!")
     sageattn_varlen = None
     sageattn = None
 
 try:
-    # raise NotImplementedError
     from xformers.ops import memory_efficient_attention as xformers_attn_func
 
-    print("Xformers is installed!")
 except ImportError:
-    print("Xformers is not installed!")
     xformers_attn_func = None
 
 
@@ -64,19 +55,28 @@ def create_navit_attention_masks(
         cu_seqlens_kv = [0]
         for _ in range(batch_size):
             for length in original_context_length_list:
-                cu_seqlens_kv.append(cu_seqlens_kv[-1] + length + history_context_length)
+                cu_seqlens_kv.append(
+                    cu_seqlens_kv[-1] + length + history_context_length
+                )
         cu_seqlens_kv = torch.tensor(cu_seqlens_kv, device=device, dtype=torch.int32)
         max_seqlen_kv = max(original_context_length_list) + history_context_length
     else:
         cu_seqlens_kv = [0]
         for _ in range(batch_size):
             for length in original_context_length_list:
-                cu_seqlens_kv.append(cu_seqlens_kv[-1] + length + history_context_length)
+                cu_seqlens_kv.append(
+                    cu_seqlens_kv[-1] + length + history_context_length
+                )
         cu_seqlens_kv = torch.tensor(cu_seqlens_kv, device=device, dtype=torch.int32)
         max_seqlen_kv = max(original_context_length_list) + history_context_length
         cu_seqlens_q = cu_seqlens_kv
         max_seqlen_q = max_seqlen_kv
-    navit_hidden_attention_mask = cu_seqlens_q, cu_seqlens_kv, max_seqlen_q, max_seqlen_kv
+    navit_hidden_attention_mask = (
+        cu_seqlens_q,
+        cu_seqlens_kv,
+        max_seqlen_q,
+        max_seqlen_kv,
+    )
 
     # For navit_history_hidden_attention_mask
     navit_history_hidden_attention_mask = None
@@ -89,7 +89,12 @@ def create_navit_attention_masks(
         max_seqlen_kv = history_context_length
         cu_seqlens_q = cu_seqlens_kv
         max_seqlen_q = max_seqlen_kv
-        navit_history_hidden_attention_mask = cu_seqlens_q, cu_seqlens_kv, max_seqlen_q, max_seqlen_kv
+        navit_history_hidden_attention_mask = (
+            cu_seqlens_q,
+            cu_seqlens_kv,
+            max_seqlen_q,
+            max_seqlen_kv,
+        )
 
     # For navit_encoder_attention_mask
     if guidance_cross_attn:
@@ -97,14 +102,20 @@ def create_navit_attention_masks(
         for _ in range(batch_size):
             for length in original_context_length_list:
                 cross_cu_seqlens_q.append(cross_cu_seqlens_q[-1] + length)
-        cross_cu_seqlens_q = torch.tensor(cross_cu_seqlens_q, device=device, dtype=torch.int32)
+        cross_cu_seqlens_q = torch.tensor(
+            cross_cu_seqlens_q, device=device, dtype=torch.int32
+        )
         cross_max_seqlen_q = max(original_context_length_list)
     else:
         cross_cu_seqlens_q = [0]
         for _ in range(batch_size):
             for length in original_context_length_list:
-                cross_cu_seqlens_q.append(cross_cu_seqlens_q[-1] + length + history_context_length)
-        cross_cu_seqlens_q = torch.tensor(cross_cu_seqlens_q, device=device, dtype=torch.int32)
+                cross_cu_seqlens_q.append(
+                    cross_cu_seqlens_q[-1] + length + history_context_length
+                )
+        cross_cu_seqlens_q = torch.tensor(
+            cross_cu_seqlens_q, device=device, dtype=torch.int32
+        )
         cross_cu_seqlens_q[0] = 0
         cross_max_seqlen_q = max(original_context_length_list) + history_context_length
 
@@ -114,9 +125,18 @@ def create_navit_attention_masks(
             cu_seqlens_kv.append(cu_seqlens_kv[-1] + encoder_hidden_states_seq_len)
     cu_seqlens_kv = torch.tensor(cu_seqlens_kv, device=device, dtype=torch.int32)
     max_seqlen_kv = encoder_hidden_states_seq_len
-    navit_encoder_attention_mask = cross_cu_seqlens_q, cu_seqlens_kv, cross_max_seqlen_q, max_seqlen_kv
+    navit_encoder_attention_mask = (
+        cross_cu_seqlens_q,
+        cu_seqlens_kv,
+        cross_max_seqlen_q,
+        max_seqlen_kv,
+    )
 
-    return navit_hidden_attention_mask, navit_encoder_attention_mask, navit_history_hidden_attention_mask
+    return (
+        navit_hidden_attention_mask,
+        navit_encoder_attention_mask,
+        navit_history_hidden_attention_mask,
+    )
 
 
 @torch.compiler.disable
@@ -125,8 +145,12 @@ def _flash_attn_wrapper(q, k, v):
 
 
 @torch.compiler.disable
-def _flash_attn_varlen_wrapper(q, k, v, cu_seqlens_q, cu_seqlens_kv, max_seqlen_q, max_seqlen_kv):
-    return flash_attn_varlen_func(q, k, v, cu_seqlens_q, cu_seqlens_kv, max_seqlen_q, max_seqlen_kv)
+def _flash_attn_varlen_wrapper(
+    q, k, v, cu_seqlens_q, cu_seqlens_kv, max_seqlen_q, max_seqlen_kv
+):
+    return flash_attn_varlen_func(
+        q, k, v, cu_seqlens_q, cu_seqlens_kv, max_seqlen_q, max_seqlen_kv
+    )
 
 
 def attn_varlen_func(q, k, v, attention_mask=None):
@@ -156,9 +180,13 @@ def attn_varlen_func(q, k, v, attention_mask=None):
 
     cu_seqlens_q, cu_seqlens_kv, max_seqlen_q, max_seqlen_kv = attention_mask
     if flash_attn_varlen_func is not None:
-        x = _flash_attn_varlen_wrapper(q, k, v, cu_seqlens_q, cu_seqlens_kv, max_seqlen_q, max_seqlen_kv)
+        x = _flash_attn_varlen_wrapper(
+            q, k, v, cu_seqlens_q, cu_seqlens_kv, max_seqlen_q, max_seqlen_kv
+        )
     elif sageattn_varlen is not None:
-        x = sageattn_varlen(q, k, v, cu_seqlens_q, cu_seqlens_kv, max_seqlen_q, max_seqlen_kv)
+        x = sageattn_varlen(
+            q, k, v, cu_seqlens_q, cu_seqlens_kv, max_seqlen_q, max_seqlen_kv
+        )
     else:
         raise NotImplementedError("No Attn Installed!")
 

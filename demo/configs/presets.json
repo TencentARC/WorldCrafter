@@ -1,0 +1,44 @@
+[
+  {
+    "id": "teaser28__I2V__01_socrates",
+    "name": "Socrates",
+    "prompt": "A scene of static, painted sculptures depicts a solemn stone prison chamber, with classical figures neatly arranged around a low wooden bed. An elderly philosopher sculpture sits upright in a white robe, one hand extended toward a cup and the other raised in a fixed rhetorical gesture. Companion sculptures wear red, blue, yellow, gray, and ochre garments, with sculpted expressions of grief, disbelief, and contemplation. All figures remain completely motionless, with rigid poses and fixed garment folds. Scrolls, shackles, cups, sandals, stools, and other props are neatly placed in clearly organized groups. Stone walls, orderly steps, and an arched passage frame the scene. The chamber is clean, tidy, and carefully arranged, forming a coherent historical tableau of painted sculptures.",
+    "image": "/inputs/teaser28__I2V__01_socrates/input.png",
+    "sha256": "4f16295556a54cee42809952ba527be2c2d38379610cc83344fa9f10f0992671"
+  },
+  {
+    "id": "projectgenie__agent__007_Painted_Pup_Beach",
+    "name": "Painted Pup Beach",
+    "prompt": "A third-person watercolor gameplay view closely follows a small painted dog trotting across a broad beach. The dog has soft brown-and-white washes, loose ink-like edges, short legs, floppy ears, and an alert tail that bobs with each step. Translucent waves spread across wet sand beside scattered shells, rocks, tide pools, dune grass, distant cliffs, and lightly painted clouds. Pigment blooms and subtle color bleeds connect the character to the watercolor environment without obscuring the terrain. The view stays near the dog while keeping the shoreline, open water, dunes, and distant coastal features visible as one continuous explorable scene. The view remains closely linked to the controlled subject while preserving the surrounding terrain, architecture, vegetation, nearby obstacles, and distant landmarks as one continuous and spatially readable gameplay environment.",
+    "image": "/inputs/projectgenie__agent__007_Painted_Pup_Beach/input.png",
+    "sha256": "7e8f4ee1fccfdbabe87389d29629d11dc6d3f202298a1068fbc49855f39913b3"
+  },
+  {
+    "id": "projectgenie__agent__010_Backyard_Racetrack",
+    "name": "Backyard Racetrack",
+    "prompt": "A third-person toy-racing game view closely follows a bright blue toy car as it drives around a backyard race track laid out like a miniature world. The course winds between oversized grass blades, garden soil, patio stones, and handmade barriers built from painted wood and household objects. Red-and-white curbs define tight bends around a flowerpot tunnel, a shallow puddle, stacked toy blocks, and a cardboard ramp. The car has chunky black tires, a compact plastic body, and visible suspension that reacts to bumps. Miniature signs, cones, and toy spectators make the backyard feel like a complete racing circuit. The view remains closely linked to the controlled subject while preserving the surrounding terrain, architecture, vegetation, nearby obstacles, and distant landmarks as one continuous and spatially readable gameplay environment.",
+    "image": "/inputs/projectgenie__agent__010_Backyard_Racetrack/input.png",
+    "sha256": "5660120423ec724bca58eadf1fe63f01c91385b190b7122a764f9cae712e04a5"
+  },
+  {
+    "id": "projectgenie__agent__008_Crater_Cruiser",
+    "name": "Crater Cruiser",
+    "prompt": "A third-person chase camera closely follows a vintage roadster as it races across a rugged alien landscape filled with traversable terrain and reactive dust. The car has a weathered metal body, exposed suspension, a narrow windshield, rounded fenders, and thick tires that compress against uneven ground. Basalt ridges, crater rims, scattered boulders, dry channels, and layered mesas divide the route into distinct traversable sections. Dust plumes curl behind the wheels, loose stones roll down slopes, and the chassis tilts as each tire crosses ruts and ledges. Strange mineral formations and sparse alien plants mark the open terrain. The view remains closely linked to the controlled subject while preserving the surrounding terrain, architecture, vegetation, nearby obstacles, and distant landmarks as one continuous and spatially readable gameplay environment.",
+    "image": "/inputs/projectgenie__agent__008_Crater_Cruiser/input.png",
+    "sha256": "3d2fe5a68a3dd8f1c3c1f26b8a443c966f8da900f447589afeae89cd6f466626"
+  },
+  {
+    "id": "projectgenie__scene__048_Hinsdale_Street",
+    "name": "Hinsdale Street",
+    "prompt": "A quiet residential street in Hinsdale, Illinois extends beside a straight concrete sidewalk on a clear day. Mature deciduous trees cast broad canopies over trimmed lawns, flower beds, driveways, and detached houses with pale siding, porches, pitched roofs, and front steps. Several dark sedans and lighter vehicles are parked along the curb and farther down the road. Hedges, ornamental shrubs, young trees, mailboxes, and narrow strips of grass organize the space between homes and pavement. The sidewalk, parked cars, repeated houses, tree-lined verges, and distant continuation of the neighborhood remain clearly connected as a complete suburban streetscape.",
+    "image": "/inputs/projectgenie__scene__048_Hinsdale_Street/input.png",
+    "sha256": "4fccb3a3fa7f480d801928fa9e2c34a5f213bfd87a58982535d6e495994345f6"
+  },
+  {
+    "id": "projectgenie__scene__046_Zen_Garden",
+    "name": "Zen Garden",
+    "prompt": "A photorealistic Japanese zen garden is organized around broad beds of fine white gravel raked into precise concentric curves and flowing parallel lines. A tall stacked-stone cairn rises near the center among smooth gray boulders, clipped moss mounds, low shrubs, sculpted pine trees, and a traditional stone lantern. A still pond occupies one side of the garden, bordered by rocks and dense green planting. A tall bamboo fence encloses the grounds while additional trees and layered vegetation fill the perimeter. The raked patterns, stone arrangements, water, moss, lantern, and carefully maintained plant forms remain balanced as one complete contemplative landscape.",
+    "image": "/inputs/projectgenie__scene__046_Zen_Garden/input.png",
+    "sha256": "3954c13d12e065508173ed0ce0284f73c314478782d79b362f4142710fb0f9e1"
+  }
+]

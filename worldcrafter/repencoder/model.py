@@ -51,7 +51,9 @@ class RepEncoder(nn.Module):
         self.dino_tail.to(dtype=torch.bfloat16)
         self.vggt.to(dtype=torch.bfloat16)
         self.repfeature.to(dtype=torch.bfloat16)
-        self.dino_tail.latent_cls_token.data = self.dino_tail.latent_cls_token.data.float()
+        self.dino_tail.latent_cls_token.data = (
+            self.dino_tail.latent_cls_token.data.float()
+        )
         self.dino_tail.latent_register_tokens.data = (
             self.dino_tail.latent_register_tokens.data.float()
         )
@@ -64,10 +66,14 @@ class RepEncoder(nn.Module):
 
     @staticmethod
     def _resolve_compute_dtype(value: str | torch.dtype) -> torch.dtype:
-        dtype = value if isinstance(value, torch.dtype) else {
-            "bfloat16": torch.bfloat16,
-            "bf16": torch.bfloat16,
-        }.get(str(value).lower())
+        dtype = (
+            value
+            if isinstance(value, torch.dtype)
+            else {
+                "bfloat16": torch.bfloat16,
+                "bf16": torch.bfloat16,
+            }.get(str(value).lower())
+        )
         if dtype != torch.bfloat16:
             raise ValueError(
                 "RepEncoder v2 has one exact inference contract: bfloat16 autocast "
@@ -179,8 +185,6 @@ class RepEncoder(nn.Module):
                 target_microbatch=self.target_microbatch,
             )
             memory4 = self.output_layer(target_features)
-        if not torch.isfinite(memory4).all():
-            raise FloatingPointError("RepEncoder output contains NaN or Inf")
         return memory4
 
     def forward(

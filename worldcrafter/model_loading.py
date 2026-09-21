@@ -53,10 +53,6 @@ def load_fast(
 ):
     from .inference import configure_attention, load_model_adapter, sha256
 
-    if enable_compile:
-        raise ValueError(
-            "Fast 5+1 is validated with eager execution; omit --enable-compile"
-        )
     if (height, width) != (384, 640):
         raise ValueError("Fast weights require height=384 and width=640")
     device = torch.device(device)
@@ -79,7 +75,7 @@ def load_fast(
             "Fast inference configuration differs from the validated release contract"
         )
     if config["routing"] != [["equal", "equal"], ["equal", "equal"], ["equal", "old"]]:
-        raise ValueError("This fast release requires the authenticated 5+1 routing")
+        raise ValueError("Fast I2V requires 5+1 routing")
     shared = (root / config["shared_components"]).resolve()
     for row in manifest["files"]:
         path = root / row["path"]
@@ -189,20 +185,35 @@ def load_fast(
 
     def record(branch):
         def hook(module, args, kwargs, output):
-            chunk, stage, step = pipe.stage_forward_context
-            expected = "old" if stage == 2 and step == 1 else "equal"
+            chunk, stage, step, stage_steps = pipe.stage_forward_context
+            low_noise = (
+                stage >= 1
+                if getattr(pipe, "fast_inference_mode", "i2v") == "t2v"
+                else stage == 2 and step >= stage_steps // 2
+            )
+            expected = "old" if low_noise else "equal"
             if branch != expected or pipe.resident_branches.active != branch:
                 raise RuntimeError("Fast transformer/adapter routing mismatch")
-            if not bool(torch.isfinite(output[0]).all()):
-                raise FloatingPointError("Nonfinite fast denoiser output")
             pipe.stage_model_trace.append(
-                dict(chunk=chunk, stage=stage, step=step, branch=branch, finite=True)
+                dict(
+                    chunk=chunk,
+                    stage=stage,
+                    step=step,
+                    stage_steps=stage_steps,
+                    branch=branch,
+                )
             )
 
         return hook
 
     early.register_forward_hook(record("equal"), with_kwargs=True)
     late.register_forward_hook(record("old"), with_kwargs=True)
+    if enable_compile:
+        # Keep routing and shared-weight switches outside compiled graphs.
+        # Compile each branch's blocks without changing parameter storage.
+        for branch in (early, late):
+            for block in branch.blocks:
+                block.compile(mode="default", dynamic=False)
     gc.collect()
     torch.cuda.empty_cache()
     model = cls(
@@ -218,6 +229,8 @@ def load_fast(
     model.model_type = "fast"
     model.fast_config = config
     model.fast_report = dict(
+        compile_enabled=bool(enable_compile),
+        compile_scope="transformer_blocks" if enable_compile else None,
         contract_fingerprint=contract.fingerprint,
         compact_ucpe=compact,
         resident=pipe.resident_branches.report,

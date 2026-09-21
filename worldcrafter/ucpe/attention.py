@@ -1,8 +1,6 @@
 import torch
 import torch.nn.functional as F
 
-from ..kernels import attn_varlen_func
-
 
 def flash_attention(
     q: torch.Tensor,
@@ -24,5 +22,7 @@ def flash_attention(
             is_causal=False,
         ).transpose(1, 2)
     else:
+        from ..kernels.attention_dispatch import attn_varlen_func
+
         out = attn_varlen_func(q, k, v)
     return out.reshape(batch, tokens, channels)

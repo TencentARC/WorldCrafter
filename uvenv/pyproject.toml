@@ -4,9 +4,14 @@ version = "0.1.0"
 description = "Reproducible inference environment for WorldCrafter"
 requires-python = ">=3.11,<3.12"
 dependencies = [
-    "worldcrafter",
-    "worldcrafter-fa3-kernel==1.0.0; sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "worldcrafter[xformers]",
+    "torch==2.10.0+cu128",
+    "torchvision==0.25.0+cu128",
+    "flash-attn-3==3.0.0",
 ]
+
+[project.optional-dependencies]
+demo = ["worldcrafter[demo]"]
 
 [tool.uv]
 index-strategy = "unsafe-best-match"
@@ -17,4 +22,3 @@ url = "https://download.pytorch.org/whl/cu128"
 
 [tool.uv.sources]
 worldcrafter = { path = "..", editable = true }
-worldcrafter-fa3-kernel = { path = "wheels/worldcrafter_fa3_kernel-1.0.0-py3-none-linux_x86_64.whl" }

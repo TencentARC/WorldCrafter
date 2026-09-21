@@ -10,8 +10,8 @@ readme = "README.md"
 requires-python = ">=3.11,<3.12"
 license-files = ["LICENSE.txt"]
 dependencies = [
-    "torch==2.10.0+cu128",
-    "torchvision==0.25.0+cu128",
+    "torch==2.10.0",
+    "torchvision==0.25.0",
     "triton==3.6.0",
     "diffusers==0.37.0",
     "transformers==5.3.0",
@@ -26,12 +26,14 @@ dependencies = [
     "ftfy",
     "regex",
     "einops",
-    "flash-attn-3==3.0.0",
     "packaging",
     "kernels==0.13.0",
     "timm==1.0.25",
-    "xformers==0.0.35",
 ]
+
+[project.optional-dependencies]
+xformers = ["xformers==0.0.35"]
+demo = ["fastapi==0.116.1", "starlette==0.47.3", "uvicorn==0.35.0", "websockets==15.0.1"]
 
 [project.scripts]
 worldcrafter = "inference:main"
@@ -41,4 +43,7 @@ py-modules = ["inference"]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["worldcrafter*"]
+include = ["worldcrafter*", "demo*"]
+
+[tool.setuptools.package-data]
+demo = ["static/*", "configs/*.json", "inputs/*/*.png"]

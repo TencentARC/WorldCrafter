@@ -1,39 +1,75 @@
-## *WorldCrafter: Consistent Video World Model with Implicit Memory Representation*
+## *WorldCrafter: Consistent Video World Model with Implicit 3D-aware Memory*
 
 🤗 If you find WorldCrafter useful, please consider giving this repo a ⭐. Your support helps us share and improve the project. Thank you!
 
 ## 🔆 Introduction
 
-WorldCrafter generates camera-controlled videos with a compact, 3D-aware memory. Given an image or text prompt and a camera trajectory, it generates video autoregressively while retaining scene information from earlier views.
+WorldCrafter enables consistent, camera-controlled scene exploration from an image or text prompt. Its camera-queryable implicit 3D-aware memory preserves scene information across viewpoints and over long horizons.
 
-We provide **WorldCrafter-Base** and **WorldCrafter-Fast**, a six-step distilled variant.
+We provide **WorldCrafter-Base** and **WorldCrafter-Fast**, a distilled model for faster inference. 
 
 ## ⚙️ Setup
 
-### 1. Environment
+### 1. Clone WorldCrafter
 
-Validated on NVIDIA H200 with Linux, Python 3.11, and CUDA 12.8.
+```bash
+git clone https://github.com/TencentARC/WorldCrafter.git
+cd WorldCrafter
+```
 
-From the repository root, run:
+### 2. Environment
+
+Use Python 3.11 on Linux with an NVIDIA GPU and a compatible driver.
+
+**Option A: uv (recommended)**
+
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then run
+from the repository root:
 
 ```bash
 uv sync --project uvenv --frozen
 source uvenv/.venv/bin/activate
 ```
 
-Both models use the same environment. See [uvenv/README.md](uvenv/README.md) for dependency details.
+This installs the locked PyTorch 2.10 / CUDA 12.8 environment and its
+acceleration dependencies.
 
-### 2. Model weights
+**Option B: conda + pip**
 
-Public weight downloads will be added when available. Place the model folders as follows:
+Create an environment and install PyTorch for your machine. For CUDA 12.8:
 
-```text
-weights/
-├── WorldCrafter_base/
-└── WorldCrafter_fast/
+```bash
+conda create -n worldcrafter python=3.11 pip -y
+conda activate worldcrafter
+python -m pip install torch==2.10.0 torchvision==0.25.0 \
+  --index-url https://download.pytorch.org/whl/cu128
+python -m pip install -e .
 ```
 
-Fast requires both folders: it shares the text encoder, tokenizer, VAE, scheduler configuration, and RepEncoder with Base.
+Choose the appropriate CUDA build from the
+[PyTorch installation commands](https://pytorch.org/get-started/previous-versions/#v2100).
+The default attention backend uses PyTorch; FlashAttention is not required.
+
+Both options support Base, Fast, and the interactive demo. See
+[uvenv/README.md](uvenv/README.md) for optional dependencies.
+
+### 3. Model weights
+
+| Models | Download Link | Notes |
+| --- | --- | --- |
+| WorldCrafter-Base | 🤗 [Hugging Face](https://huggingface.co/TencentARC/WorldCrafter-Base) | Base model |
+| WorldCrafter-Fast | 🤗 [Hugging Face](https://huggingface.co/TencentARC/WorldCrafter-Fast) | Distilled high- and low-noise models for faster inference |
+
+Download weights with the Hugging Face CLI:
+
+```bash
+hf download TencentARC/WorldCrafter-Fast --local-dir weights/WorldCrafter-Fast
+
+# Optional: also download Base to run the base model
+hf download TencentARC/WorldCrafter-Base --local-dir weights/WorldCrafter-Base
+```
+
+Base model uses shared components from `WorldCrafter-Fast`, so keep both folders when using base model.
 
 ## 💫 Inference
 
@@ -43,19 +79,25 @@ Run the bundled image, prompt, and camera trajectory with either model:
 
 ```bash
 # Base
-python inference.py --output-path outputs/base.mp4
+python inference.py --output-path output/base.mp4
 
 # Fast
-python inference.py --model-type fast --output-path outputs/fast.mp4
+python inference.py --model-type fast --output-path output/fast.mp4
 ```
 
-Fast uses six denoising steps per chunk and currently supports image-to-video at 384 × 640 in eager mode, without resume.
+Fast supports image-to-video and text-to-video at 384 × 640. Resuming a previous rollout is currently supported only by Base.
 
 ### 2. Text-to-video
 
 ```bash
-python inference.py --mode t2v --output-path outputs/t2v.mp4
+# Base
+python inference.py --mode t2v --output-path output/t2v.mp4
+
+# Fast
+python inference.py --model-type fast --mode t2v --output-path output/fast_t2v.mp4
 ```
+
+Compilation is **off by default**. Add `--enable-compile` to enable it; the first run takes longer to start.
 
 ### 3. Custom inputs
 
@@ -64,12 +106,27 @@ python inference.py \
   --image-path path/to/image.png \
   --camera-path path/to/camera.npy \
   --prompt "A sunlit room with neatly arranged furniture." \
-  --output-path outputs/custom.mp4
+  --output-path output/custom.mp4
 ```
 
 Camera trajectories use global camera-to-world matrices in `[T, 3, 4]` or `[T, 4, 4]` NumPy arrays, with metric translations and 33 frames per chunk. Example inputs are included in [`test/`](test/). Use `--num-chunks` to limit the rollout and `--chunk-output-dir` to save individual chunks.
 
+Without `--output-path`, each run writes `video.mp4` and its metadata under
+`output/<model>/<mode>/<run-id>/`. Use `--output-path` to choose an explicit filename.
+
 Run `python inference.py --help` for all options.
+
+## 🎮 Interactive Demo
+
+Install the [demo dependencies](uvenv/README.md#interactive-demo), then explore
+a scene with keyboard camera controls from your activated environment:
+
+```bash
+python -m demo --model-path weights/WorldCrafter-Fast
+```
+
+Open `http://localhost:8080`. The single-GPU demo uses Fast image-to-video with
+compilation enabled. See [demo/README.md](demo/README.md) for controls and deployment.
 
 ## 📄 License
 
