@@ -3,7 +3,7 @@
 <p align="center">
   <a href=""><img src="https://img.shields.io/badge/arXiv-Paper-b31b1b.svg" alt="arXiv Paper"></a> &nbsp;
   <a href="https://drexubery.github.io/WorldCrafter/"><img src="https://img.shields.io/badge/Project-Page-Green" alt="Project Page"></a> &nbsp;
-  <a href=""><img src="https://img.shields.io/badge/Youtube-Video-b31b1b.svg" alt="YouTube Video"></a> &nbsp;
+  <a href="https://www.youtube.com/watch?v=sg09ftQOl0E&amp;t=5s"><img src="https://img.shields.io/badge/Youtube-Video-b31b1b.svg" alt="YouTube Video"></a> &nbsp;
   <a href="https://huggingface.co/TencentARC/WorldCrafter-Fast"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Weights-blue" alt="Hugging Face Weights"></a>
 </p>
 
@@ -14,6 +14,10 @@
 WorldCrafter enables consistent, camera-controlled scene exploration from an image or text prompt. Its camera-queryable implicit 3D-aware memory preserves scene information across viewpoints and over long horizons.
 
 We provide **WorldCrafter-Base** and **WorldCrafter-Fast**, a distilled model for faster inference. 
+
+## 🎬 Video Demos
+
+[![WorldCrafter Video Demo](assets/teaser.png)](https://www.youtube.com/watch?v=sg09ftQOl0E&t=5s)
 
 ## ⚙️ Setup
 
