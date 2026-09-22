@@ -33,13 +33,17 @@ authenticated proxy when making it publicly accessible.
 
 | Input | Action |
 | --- | --- |
-| W / S | Forward / backward |
-| A / D | Left / right |
+| W / S | `forward` / `backward` on the horizontal plane |
+| A / D | `left` / `right` on the horizontal plane |
 | Q / E | Move up / down along the world vertical axis |
-| Arrow keys | Rotate the camera |
+| Left / right arrows | `yaw_left` / `yaw_right`: turn around the world vertical axis |
+| Up / down arrows | `pitch_up` / `pitch_down`: look up / down |
 | Esc or window blur | Clear pending movement |
 
 Each chunk uses one action. A new key replaces the pending action until the next
 chunk starts. Tap for one chunk or hold for continued movement. With no pending
 action, generation waits. Pause, resume, restart, and video download are
 available in the page.
+
+The demo and [script camera actions](../README.md#4-camera-actions) use the same
+motion rules. Looking up or down does not change the height of W/S/A/D movement.

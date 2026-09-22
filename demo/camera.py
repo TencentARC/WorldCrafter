@@ -1,36 +1,9 @@
 """Metric c2w controls: x right, y down, z forward, endpoint-exclusive frames."""
 
-from dataclasses import asdict, dataclass
 import math
 import numpy as np
 
-
-@dataclass(frozen=True)
-class Action:
-    forward: float = 0.0
-    right: float = 0.0
-    yaw: float = 0.0
-    pitch: float = 0.0
-    speed: float = 1.0
-    up: float = 0.0
-
-    def normalized(self):
-        values = [self.forward, self.right, self.up, self.yaw, self.pitch, self.speed]
-        if not all(math.isfinite(v) for v in values):
-            raise ValueError("Control values must be finite")
-        if sum(v != 0 for v in values[:5]) > 1:
-            raise ValueError("Only one movement or rotation may be active per chunk")
-        return Action(
-            forward=max(-1.0, min(1.0, self.forward)),
-            right=max(-1.0, min(1.0, self.right)),
-            up=max(-1.0, min(1.0, self.up)),
-            yaw=max(-30.0, min(30.0, self.yaw)),
-            pitch=max(-30.0, min(30.0, self.pitch)),
-            speed=max(0.1, min(5.0, self.speed)),
-        )
-
-    def json(self):
-        return asdict(self)
+from worldcrafter.camera import Action, sample_chunk
 
 
 class ControlBuffer:
@@ -108,37 +81,11 @@ class Camera:
         self.world = np.eye(4, dtype=np.float64)
         self.local_chunks, self.global_chunks = [], []
 
-    @staticmethod
-    def relative(action, alpha, up_direction=None):
-        y, p = math.radians(action.yaw) * alpha, math.radians(action.pitch) * alpha
-        cy, sy, cp, sp = math.cos(y), math.sin(y), math.cos(p), math.sin(p)
-        pose = np.eye(4, dtype=np.float64)
-        pose[:3, :3] = np.array(
-            [[cy, sy * sp, sy * cp], [0, cp, -sp], [-sy, cy * sp, cy * cp]]
-        )
-        pose[:3, 3] = [
-            alpha * action.right * action.speed,
-            -alpha * action.up * action.speed if action.up else 0.0,
-            alpha * action.forward * action.speed,
-        ]
-        if action.up and up_direction is not None:
-            pose[:3, 3] = alpha * action.up * action.speed * up_direction
-        return pose
-
     def append(self, action):
-        action = action.normalized()
-        # Q/E always follows world vertical, including after a pitch rotation.
-        up_direction = self.world[:3, :3].T @ np.array([0.0, -1.0, 0.0])
-        local = np.stack(
-            [self.relative(action, j / 33.0, up_direction) for j in range(33)]
-        )
-        global_pose = self.world[None] @ local
-        if action.up:
-            global_pose[:, :3, 3] = self.world[:3, 3]
-            global_pose[:, 1, 3] -= np.arange(33) / 33.0 * action.up * action.speed
-            self.world[1, 3] -= action.up * action.speed
-        else:
-            self.world = self.world @ self.relative(action, 1.0)
+        global_pose, end = sample_chunk(self.world, action.normalized())
+        local = np.linalg.inv(self.world)[None] @ global_pose
+        local[0] = np.eye(4)
+        self.world = end
         self.local_chunks.append(local[:, :3].astype(np.float32))
         self.global_chunks.append(global_pose[:, :3].astype(np.float32))
         return self.poses()

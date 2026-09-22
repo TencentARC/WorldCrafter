@@ -1,0 +1,9 @@
+@last_frame include
+
+forward1x2
+backward1x4
+yaw_right45x2
+yaw_left45x4
+right1x2
+yaw_right45x4
+yaw_left45x2

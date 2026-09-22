@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from worldcrafter.cli import parse_args
-from worldcrafter.inference import WorldCrafter
+from worldcrafter.cli import parse_args, prepare_camera
 
 
 def main() -> None:
     args = parse_args()
+    prepare_camera(args)
+
+    from worldcrafter.inference import WorldCrafter
+
     model = WorldCrafter.from_pretrained(
         args.model_path,
         model_type=args.model_type,

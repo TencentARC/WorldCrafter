@@ -1,0 +1,15 @@
+forward2
+backward2
+left1
+right1
+forward2&right2&yaw_left45
+reverse1
+left1.5
+forward2x3
+reverse4
+up2&forward1.5&pitch_down30
+reverse1
+right1.5
+forward1.5&left2&yaw_right45
+reverse1
+left1.5

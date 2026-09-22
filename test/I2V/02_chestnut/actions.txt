@@ -1,0 +1,9 @@
+@dtype float32
+@last_frame include
+
+backward1.5x4
+yaw_left45x2
+forward1.5x4
+yaw_right45x2
+forward1.5x2
+right1.5x4

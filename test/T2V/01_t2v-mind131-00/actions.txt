@@ -1,0 +1,8 @@
+@dtype float32
+
+left2x2
+right2x4
+left2x2
+forward2x4
+backward2x4
+yaw_left45x8

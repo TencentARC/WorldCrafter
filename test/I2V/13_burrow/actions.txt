@@ -1,0 +1,12 @@
+@dtype float32
+@sampling smooth_turns
+
+forward1x2
+left1x2
+yaw_left30x3
+left1x3
+yaw_right30x3
+right1x5
+yaw_right30x4
+yaw_left30x3
+reverse_frames25

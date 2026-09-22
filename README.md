@@ -1,7 +1,7 @@
 # WorldCrafter: Consistent Video World Model with Implicit 3D-aware Memory
 
 <p align="center">
-  <a href=""><img src="https://img.shields.io/badge/arXiv-Paper-b31b1b.svg" alt="arXiv Paper"></a> &nbsp;
+  <a href="https://arxiv.org/abs/2609.24984"><img src="https://img.shields.io/badge/arXiv-2609.24984-b31b1b.svg" alt="arXiv Paper"></a> &nbsp;
   <a href="https://drexubery.github.io/WorldCrafter/"><img src="https://img.shields.io/badge/Project-Page-Green" alt="Project Page"></a> &nbsp;
   <a href="https://www.youtube.com/watch?v=sg09ftQOl0E&amp;t=5s"><img src="https://img.shields.io/badge/Youtube-Video-b31b1b.svg" alt="YouTube Video"></a> &nbsp;
   <a href="https://huggingface.co/TencentARC/WorldCrafter-Fast"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Weights-blue" alt="Hugging Face Weights"></a>
@@ -86,7 +86,14 @@ Base model uses shared components from `WorldCrafter-Fast`, so keep both folders
 
 ### 1. Image-to-video
 
-Run the bundled image, prompt, and camera trajectory with either model:
+Two examples illustrate different prompt styles:
+
+| Example | Scene | Prompt style |
+| --- | --- | --- |
+| [Cat](test/I2V/00_cat_vac) (default) | A cat riding a moving robot vacuum | Third-person subject following |
+| [Socrates](test/I2V/01_socrates) | A static tableau of painted sculptures | Scene layout, materials, and fixed poses |
+
+Run Cat with either model:
 
 ```bash
 # Base
@@ -96,9 +103,24 @@ python inference.py --output-path output/base.mp4
 python inference.py --model-type fast --output-path output/fast.mp4
 ```
 
+Run Socrates:
+
+```bash
+python inference.py --model-type fast \
+  --image-path test/I2V/01_socrates/image.png \
+  --prompt-path test/I2V/01_socrates/prompt.txt \
+  --camera-path test/I2V/01_socrates/camera.npy
+```
+
+For moving subjects, start with **“A third-person ... view closely follows ...”**
+to encourage subject following. See the [camera and prompt guide](test/README.md)
+for static scenes, dynamic subjects, and suggested prompt lengths.
+
 Fast supports image-to-video and text-to-video at 384 × 640. Resuming a previous rollout is currently supported only by Base.
 
 ### 2. Text-to-video
+
+The default example follows a [red balloon](test/T2V/00_red_balloon).
 
 ```bash
 # Base
@@ -106,6 +128,15 @@ python inference.py --mode t2v --output-path output/t2v.mp4
 
 # Fast
 python inference.py --model-type fast --mode t2v --output-path output/fast_t2v.mp4
+```
+
+To try the [Tokyo street](test/T2V/02_tokyo_street) example:
+
+```bash
+python inference.py --model-type fast --mode t2v \
+  --prompt-path test/T2V/02_tokyo_street/prompt.txt \
+  --negative-prompt-path test/T2V/02_tokyo_street/negative_prompt.txt \
+  --actions-file test/T2V/02_tokyo_street/actions.txt
 ```
 
 Compilation is **off by default**. Add `--enable-compile` to enable it; the first run takes longer to start.
@@ -120,7 +151,42 @@ python inference.py \
   --output-path output/custom.mp4
 ```
 
-Camera trajectories use global camera-to-world matrices in `[T, 3, 4]` or `[T, 4, 4]` NumPy arrays, with metric translations and 33 frames per chunk. Example inputs are included in [`test/`](test/). Use `--num-chunks` to limit the rollout and `--chunk-output-dir` to save individual chunks.
+Camera trajectories use global camera-to-world matrices in `[T, 3, 4]` or `[T, 4, 4]` NumPy arrays, with metric translations and 33 frames per chunk. Use `--num-chunks` to limit the rollout and `--chunk-output-dir` to save individual chunks.
+
+Example cases are grouped under [`test/I2V`](test/I2V) and [`test/T2V`](test/T2V).
+Each case contains `prompt.txt`, `camera.npy`, and `actions.txt`; I2V cases also
+include `image.png`. [`test/negative_prompt.txt`](test/negative_prompt.txt) is loaded by default;
+Tokyo street supplies its original negative prompt separately.
+
+| Mode | Cases |
+| --- | --- |
+| I2V | `01_socrates`, `02_chestnut`, `06_waterfall`, `10_case061`, `13_burrow`, `15_case104` |
+| T2V | `00_red_balloon`, `01_t2v-mind131-00`, `02_tokyo_street` |
+
+The original default examples are `I2V/00_cat_vac` and `T2V/00_red_balloon`.
+
+For either mode, switch between `--camera-path <case>/camera.npy` and
+`--actions-file <case>/actions.txt` to choose the trajectory input.
+
+### 4. Camera actions
+
+Instead of `--camera-path`, describe a trajectory with actions:
+
+```bash
+python inference.py --model-type fast --actions "forward1x2 yaw_left30x3 backward1"
+```
+
+This generates six 33-frame chunks. Use `--actions-file actions.txt` for a saved
+sequence, or generate camera poses separately:
+
+```bash
+python tools/build_trajectory.py --actions-file actions.txt --output-dir output/trajectory
+python inference.py --model-type fast --camera-path output/trajectory/camera.npy
+```
+
+Choose one of `--camera-path`, `--actions`, or `--actions-file`. See the
+[camera and prompt guide](test/README.md) for action names, coordinate conventions,
+compound movements, and prompt examples.
 
 Without `--output-path`, each run writes `video.mp4` and its metadata under
 `output/<model>/<mode>/<run-id>/`. Use `--output-path` to choose an explicit filename.
@@ -128,6 +194,8 @@ Without `--output-path`, each run writes `video.mp4` and its metadata under
 Run `python inference.py --help` for all options.
 
 ## 🎮 Interactive Demo
+
+> The interactive demo is currently being debugged.
 
 Install the [demo dependencies](uvenv/README.md#interactive-demo), then explore
 a scene with keyboard camera controls from your activated environment:
@@ -138,6 +206,22 @@ python -m demo --model-path weights/WorldCrafter-Fast
 
 Open `http://localhost:8080`. The single-GPU demo uses Fast image-to-video with
 compilation enabled. See [demo/README.md](demo/README.md) for controls and deployment.
+
+## 📝 Citation
+
+If you find WorldCrafter useful in your research, please cite:
+
+```bibtex
+@misc{yu2026worldcrafter,
+  title={WorldCrafter: Consistent Video World Model with Implicit {3D}-aware Memory},
+  author={Wangbo Yu and Kunhao Liu and Wenbo Hu and Shenghai Yuan and Chaoran Feng and Haiyang Zhou and Yukun Huang and Yiran Wang and Wang Zhao and Yingmin Luo and Ying Shan},
+  year={2026},
+  eprint={2609.24984},
+  archivePrefix={arXiv},
+  primaryClass={cs.CV},
+  url={https://arxiv.org/abs/2609.24984}
+}
+```
 
 ## 📄 License
 

@@ -9,12 +9,14 @@ from typing import Sequence
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MODEL = ROOT / "weights" / "WorldCrafter-Base"
-DEFAULT_IMAGE = ROOT / "test" / "images" / "023_Cat_Vac.png"
-DEFAULT_I2V_CAMERA = ROOT / "test" / "poses" / "camera.npy"
-DEFAULT_T2V_CAMERA = ROOT / "test" / "poses" / "t2v_camera.npy"
-DEFAULT_I2V_PROMPT = ROOT / "test" / "prompts" / "i2v.txt"
-DEFAULT_T2V_PROMPT = ROOT / "test" / "prompts" / "t2v.txt"
-DEFAULT_NEGATIVE_PROMPT = ROOT / "test" / "prompts" / "negative.txt"
+DEFAULT_I2V_CASE = ROOT / "test" / "I2V" / "00_cat_vac"
+DEFAULT_T2V_CASE = ROOT / "test" / "T2V" / "00_red_balloon"
+DEFAULT_IMAGE = DEFAULT_I2V_CASE / "image.png"
+DEFAULT_I2V_CAMERA = DEFAULT_I2V_CASE / "camera.npy"
+DEFAULT_T2V_CAMERA = DEFAULT_T2V_CASE / "camera.npy"
+DEFAULT_I2V_PROMPT = DEFAULT_I2V_CASE / "prompt.txt"
+DEFAULT_T2V_PROMPT = DEFAULT_T2V_CASE / "prompt.txt"
+DEFAULT_NEGATIVE_PROMPT = ROOT / "test" / "negative_prompt.txt"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -30,7 +32,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional precomputed chunk-local UCPE poses for fast; --camera-path always supplies global metric poses",
     )
     parser.add_argument("--image-path", type=Path)
-    parser.add_argument("--camera-path", type=Path)
+    camera = parser.add_mutually_exclusive_group()
+    camera.add_argument("--camera-path", type=Path, help="Global c2w trajectory (.npy)")
+    camera.add_argument("--actions", help='Camera actions, e.g. "forward1x2 yaw_left30x3 backward1"')
+    camera.add_argument("--actions-file", type=Path, help="TXT file of camera actions")
     parser.add_argument("--prompt")
     parser.add_argument("--prompt-path", type=Path)
     parser.add_argument("--negative-prompt")
@@ -102,7 +107,20 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     if args.resume_from is not None and args.chunk_output_dir is None:
         raise ValueError("--resume-from requires --chunk-output-dir")
 
-    if args.camera_path is None:
+    args.camera_events = None
+    args.camera_options = {}
+    if args.actions is not None or args.actions_file is not None:
+        from .camera import count_chunks, parse_trajectory
+
+        if args.local_camera_path is not None:
+            raise ValueError("--local-camera-path cannot be combined with camera actions")
+        text = args.actions if args.actions is not None else args.actions_file.read_text(encoding="utf-8-sig")
+        args.camera_events, args.camera_options = parse_trajectory(text)
+        if args.num_chunks is not None:
+            total = count_chunks(args.camera_events)
+            if args.num_chunks > total:
+                raise ValueError(f"Actions provide {total} chunks, but {args.num_chunks} were requested")
+    elif args.camera_path is None:
         args.camera_path = (
             DEFAULT_I2V_CAMERA if args.mode == "i2v" else DEFAULT_T2V_CAMERA
         )
@@ -132,4 +150,17 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return args
 
 
-__all__ = ["build_parser", "parse_args"]
+def prepare_camera(args: argparse.Namespace) -> None:
+    if args.camera_events is not None:
+        from .camera import build_trajectory, save_trajectory
+
+        camera, records = build_trajectory(args.camera_events, **args.camera_options)
+        directory = args.output_path.parent / f"{args.output_path.stem}_trajectory"
+        args.camera_path = save_trajectory(
+            directory, camera, records, fps=args.fps,
+            events=args.camera_events, options=args.camera_options,
+        )
+        print(f"[worldcrafter] saved {len(records)} camera chunks to {args.camera_path}")
+
+
+__all__ = ["build_parser", "parse_args", "prepare_camera"]
