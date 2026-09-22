@@ -45,5 +45,5 @@ chunk starts. Tap for one chunk or hold for continued movement. With no pending
 action, generation waits. Pause, resume, restart, and video download are
 available in the page.
 
-The demo and [script camera actions](../README.md#4-camera-actions) use the same
+The demo and [script camera actions](../docs/GETTING_STARTED.md#4-camera-actions) use the same
 motion rules. Looking up or down does not change the height of W/S/A/D movement.

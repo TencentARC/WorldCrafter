@@ -1,6 +1,6 @@
 # WorldCrafter environment
 
-See the [installation instructions](../README.md#2-environment) for uv and
+See the [installation instructions](../docs/GETTING_STARTED.md#2-environment) for uv and
 conda setup. Both use Python 3.11 and the same project dependencies.
 
 ## Interactive demo
