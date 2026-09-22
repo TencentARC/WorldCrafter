@@ -86,14 +86,7 @@ Base model uses shared components from `WorldCrafter-Fast`, so keep both folders
 
 ### 1. Image-to-video
 
-Two examples illustrate different prompt styles:
-
-| Example | Scene | Prompt style |
-| --- | --- | --- |
-| [Cat](test/I2V/00_cat_vac) (default) | A cat riding a moving robot vacuum | Third-person subject following |
-| [Socrates](test/I2V/01_socrates) | A static tableau of painted sculptures | Scene layout, materials, and fixed poses |
-
-Run Cat with either model:
+Run with either model:
 
 ```bash
 # Base
@@ -103,24 +96,9 @@ python inference.py --output-path output/base.mp4
 python inference.py --model-type fast --output-path output/fast.mp4
 ```
 
-Run Socrates:
-
-```bash
-python inference.py --model-type fast \
-  --image-path test/I2V/01_socrates/image.png \
-  --prompt-path test/I2V/01_socrates/prompt.txt \
-  --camera-path test/I2V/01_socrates/camera.npy
-```
-
-For moving subjects, start with **“A third-person ... view closely follows ...”**
-to encourage subject following. See the [camera and prompt guide](test/README.md)
-for static scenes, dynamic subjects, and suggested prompt lengths.
-
 Fast supports image-to-video and text-to-video at 384 × 640. Resuming a previous rollout is currently supported only by Base.
 
 ### 2. Text-to-video
-
-The default example follows a [red balloon](test/T2V/00_red_balloon).
 
 ```bash
 # Base
@@ -128,15 +106,6 @@ python inference.py --mode t2v --output-path output/t2v.mp4
 
 # Fast
 python inference.py --model-type fast --mode t2v --output-path output/fast_t2v.mp4
-```
-
-To try the [Tokyo street](test/T2V/02_tokyo_street) example:
-
-```bash
-python inference.py --model-type fast --mode t2v \
-  --prompt-path test/T2V/02_tokyo_street/prompt.txt \
-  --negative-prompt-path test/T2V/02_tokyo_street/negative_prompt.txt \
-  --actions-file test/T2V/02_tokyo_street/actions.txt
 ```
 
 Compilation is **off by default**. Add `--enable-compile` to enable it; the first run takes longer to start.
@@ -147,26 +116,11 @@ Compilation is **off by default**. Add `--enable-compile` to enable it; the firs
 python inference.py \
   --image-path path/to/image.png \
   --camera-path path/to/camera.npy \
-  --prompt "A sunlit room with neatly arranged furniture." \
+  --prompt "Your scene description" \
   --output-path output/custom.mp4
 ```
 
 Camera trajectories use global camera-to-world matrices in `[T, 3, 4]` or `[T, 4, 4]` NumPy arrays, with metric translations and 33 frames per chunk. Use `--num-chunks` to limit the rollout and `--chunk-output-dir` to save individual chunks.
-
-Example cases are grouped under [`test/I2V`](test/I2V) and [`test/T2V`](test/T2V).
-Each case contains `prompt.txt`, `camera.npy`, and `actions.txt`; I2V cases also
-include `image.png`. [`test/negative_prompt.txt`](test/negative_prompt.txt) is loaded by default;
-Tokyo street supplies its original negative prompt separately.
-
-| Mode | Cases |
-| --- | --- |
-| I2V | `01_socrates`, `02_chestnut`, `06_waterfall`, `10_case061`, `13_burrow`, `15_case104` |
-| T2V | `00_red_balloon`, `01_t2v-mind131-00`, `02_tokyo_street` |
-
-The original default examples are `I2V/00_cat_vac` and `T2V/00_red_balloon`.
-
-For either mode, switch between `--camera-path <case>/camera.npy` and
-`--actions-file <case>/actions.txt` to choose the trajectory input.
 
 ### 4. Camera actions
 

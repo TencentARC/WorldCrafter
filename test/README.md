@@ -15,6 +15,22 @@ Run the commands below from the repository root.
 | T2V | [Red balloon](T2V/00_red_balloon) | Default; a balloon floating through an abandoned street |
 | T2V | [Tokyo street](T2V/02_tokyo_street) | A woman walking through a neon-lit street |
 
+Run the Tokyo street example with its original prompt and negative prompt:
+
+```bash
+python inference.py --model-type fast --mode t2v \
+  --prompt-path test/T2V/02_tokyo_street/prompt.txt \
+  --negative-prompt-path test/T2V/02_tokyo_street/negative_prompt.txt \
+  --actions-file test/T2V/02_tokyo_street/actions.txt
+```
+
+Additional examples:
+
+| Mode | Cases |
+| --- | --- |
+| I2V | `02_chestnut`, `06_waterfall`, `10_case061`, `13_burrow`, `15_case104` |
+| T2V | `01_t2v-mind131-00` |
+
 ## Camera inputs
 
 Choose either the saved poses or the action description for the same example:
