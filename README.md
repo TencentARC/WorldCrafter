@@ -17,7 +17,7 @@ We provide **WorldCrafter-Base** and **WorldCrafter-Fast**, a distilled model fo
 
 ## 🎬 Video Demos
 
-[![WorldCrafter Video Demo](assets/teaser.png)](https://www.youtube.com/watch?v=sg09ftQOl0E&t=5s)
+https://github.com/user-attachments/assets/e0428e46-6740-4129-b822-f4c65e7612a1
 
 ## ⚙️ Setup
 
