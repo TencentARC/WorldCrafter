@@ -86,6 +86,8 @@ Base model uses shared components from `WorldCrafter-Fast`, so keep both folders
 
 ### 1. Image-to-video
 
+See the [inference guide](test/README.md) for camera controls, prompt writing, and examples.
+
 Run with either model:
 
 ```bash
@@ -138,9 +140,7 @@ python tools/build_trajectory.py --actions-file actions.txt --output-dir output/
 python inference.py --model-type fast --camera-path output/trajectory/camera.npy
 ```
 
-Choose one of `--camera-path`, `--actions`, or `--actions-file`. See the
-[camera and prompt guide](test/README.md) for action names, coordinate conventions,
-compound movements, and prompt examples.
+Choose one of `--camera-path`, `--actions`, or `--actions-file`.
 
 Without `--output-path`, each run writes `video.mp4` and its metadata under
 `output/<model>/<mode>/<run-id>/`. Use `--output-path` to choose an explicit filename.
