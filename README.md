@@ -15,7 +15,7 @@ WorldCrafter enables consistent, camera-controlled scene exploration from an ima
 
 We provide **WorldCrafter-Base** and **WorldCrafter-Fast**, a distilled model for faster inference. 
 
-https://github.com/user-attachments/assets/e0428e46-6740-4129-b822-f4c65e7612a1
+https://github.com/user-attachments/assets/721a6e31-e411-4802-8c60-3ccc6e9cb33b
 
 ## ⚙️ Setup
 
@@ -86,7 +86,7 @@ Base model uses shared components from `WorldCrafter-Fast`, so keep both folders
 
 ## 💫 Inference
 
-See the [inference guide](test/README.md) for camera controls, prompt writing, and examples.
+See the [inference guide](test/README.md) for camera controls, prompt writing, examples and custom inputs.
 
 ### 1. Image-to-video
 
@@ -126,16 +126,6 @@ python inference.py --model-type fast --mode t2v \
 ```
 
 Compilation is **off by default**. Add `--enable-compile` to enable it; the first run takes longer to start.
-
-### 3. Custom inputs
-
-```bash
-python inference.py \
-  --image-path path/to/image.png \
-  --camera-path path/to/camera.npy \
-  --prompt "Your scene description" \
-  --output-path output/custom.mp4
-```
 
 
 
