@@ -10,7 +10,7 @@ Place the complete `WorldCrafter-Fast` folder under `weights/` as described in
 the main README. Base weights are not required for the demo.
 Install FFmpeg so that `ffmpeg` and `ffprobe` are available on `PATH`.
 
-Install the [demo dependencies](../uvenv/README.md#interactive-demo), activate
+Follow the [environment setup](../README.md#2-environment), activate
 your uv or conda environment, then run from the repository root:
 
 ```bash

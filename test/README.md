@@ -1,62 +1,65 @@
 # Camera and prompt guide
 
-Each example contains `prompt.txt`, `camera.npy`, and `actions.txt`. I2V examples
-also include `image.png`. The shared `negative_prompt.txt` is loaded by default.
-Tokyo street includes its original `negative_prompt.txt`; select it with
-`--negative-prompt-path test/T2V/02_tokyo_street/negative_prompt.txt`.
+Examples are organized under [`test/`](./). Each example includes `prompt.txt`,
+`camera.npy`, and `actions.txt`, with an additional `image.png` for I2V.
+All examples use the shared `test/negative_prompt.txt` by default.
 Run the commands below from the repository root.
 
-## Choose an example
+## Inference examples
 
-| Mode | Example | Description |
-| --- | --- | --- |
-| I2V | [Cat](I2V/00_cat_vac) | Default; a cat riding a moving robot vacuum |
-| I2V | [Socrates](I2V/01_socrates) | Motionless painted sculptures in a stone chamber |
-| T2V | [Red balloon](T2V/00_red_balloon) | Default; a balloon floating through an abandoned street |
-| T2V | [Tokyo street](T2V/02_tokyo_street) | A woman walking through a neon-lit street |
+Replace `path/to/` with your input paths. Both modes support `--model-type base`
+or `--model-type fast`.
 
-Run the Tokyo street example with its original prompt and negative prompt:
+### Image-to-video
+
+```bash
+python inference.py --model-type fast --mode i2v \
+  --image-path path/to/image.png \
+  --prompt-path path/to/prompt.txt \
+  --camera-path path/to/camera.npy
+```
+
+### Text-to-video
 
 ```bash
 python inference.py --model-type fast --mode t2v \
-  --prompt-path test/T2V/02_tokyo_street/prompt.txt \
-  --negative-prompt-path test/T2V/02_tokyo_street/negative_prompt.txt \
-  --actions-file test/T2V/02_tokyo_street/actions.txt
+  --prompt-path path/to/prompt.txt \
+  --actions-file path/to/actions.txt
 ```
 
-Additional examples:
+### Parameters
 
-| Mode | Cases |
+| Parameter | Description |
 | --- | --- |
-| I2V | `02_chestnut`, `06_waterfall`, `10_case061`, `13_burrow`, `15_case104` |
-| T2V | `01_t2v-mind131-00` |
+| `--model-type` | Select `base` or `fast`. |
+| `--mode` | Select `i2v` or `t2v`. |
+| `--image-path` | Starting image for I2V; omit for T2V. |
+| `--prompt-path` | Read the prompt from a text file. Use `--prompt "..."` to pass text directly instead. |
+| `--camera-path` | Load a global c2w trajectory from a `.npy` file. |
+| `--actions-file` | Generate the trajectory from an action text file. Use `--actions "forward1 yaw_left30"` to pass actions directly instead. |
+| `--num-chunks` | Generate only the first N chunks; otherwise use the full trajectory. Each chunk contains 33 frames. |
+| `--seed` | Random seed; defaults to `42`. |
+| `--output-path` | Output video path. By default, each run creates a directory under `output/<model-type>/<mode>/`. |
+| `--enable-compile` | Enable compilation; disabled by default. |
+
+Choose exactly one trajectory input: `--camera-path`, `--actions-file`, or
+`--actions`. All three are available in both modes. Negative prompts default to
+`test/negative_prompt.txt`; override with `--negative-prompt-path` when needed.
+Negative prompts affect Base with CFG enabled; Fast uses CFG=1 and does not use
+them for sampling.
 
 ## Camera inputs
 
-Choose either the saved poses or the action description for the same example:
+Define camera motion with actions, or load an existing camera-to-world (c2w)
+trajectory. Both options work with I2V and T2V and use 33 frames per chunk.
 
-```bash
-python inference.py --model-type fast \
-  --image-path test/I2V/01_socrates/image.png \
-  --prompt-path test/I2V/01_socrates/prompt.txt \
-  --camera-path test/I2V/01_socrates/camera.npy
-```
+### Define a trajectory with actions
 
-Replace the last argument with `--actions-file test/I2V/01_socrates/actions.txt`
-to generate the poses from actions. For T2V, use `--mode t2v`, omit `--image-path`,
-and select a T2V example's prompt and trajectory.
-
-### Write actions
-
-```text
-forward1x2
-yaw_left30x3
-backward1
-```
-
-This generates six chunks: two forward moves, three left turns, and one backward
-move. Each chunk has 33 frames. Movement values are distances; rotation values
-are degrees. Use `--num-chunks` to run only the beginning of a sequence.
+An action consists of a movement name and a value, optionally followed by `xN`
+to repeat it N times. Translation values specify distance in the model's
+coordinate scale; rotation values specify degrees. Each action produces one
+chunk before repetition. Separate actions with spaces, commas, or newlines;
+use `#` for comments.
 
 | Movement | Actions | Short forms |
 | --- | --- | --- |
@@ -65,75 +68,100 @@ are degrees. Use `--num-chunks` to run only the beginning of a sequence.
 | Up / down | `up1`, `down1` | Same |
 | Turn left / right | `yaw_left30`, `yaw_right30` | `yl30`, `yr30` |
 | Look up / down | `pitch_up15`, `pitch_down15` | `pu15`, `pd15` |
+| Repeat over N chunks | `forward1xN` | `f1xN` |
+| Combine within one chunk | `forward2&right2&yaw_left45` | `f2&r2&yl45` |
+| Retrace the preceding N chunks | `reverseN` | Same |
 
-The camera starts at the origin, facing +Z, with +X to the right and +Y down.
-Forward/backward and left/right follow its heading on the horizontal plane;
-pitch does not change movement height. Up/down follows the world vertical axis.
-Yaw turns in place. Keep the total translation distance per chunk at most 5;
-split longer movements into repeated actions.
+The values above are examples and can be changed. For example, an `actions.txt`
+file can contain:
 
-Use spaces, commas, or newlines between actions, and `#` for comments. `xN`
-repeats an action. `&` combines movements and rotations in one chunk, such as
-`forward2&right2&yaw_left45`; translation follows the heading at the chunk's
-start. `reverseN` retraces the preceding N chunks. `reverse_framesN` replays their
-sampled poses in reverse frame order. Each reverse command generates N chunks.
+```text
+forward1x2
+backward1
+left1
+right1
+up1
+down1
+yaw_left30
+yaw_right30
+pitch_up15
+pitch_down15
+forward2&right2&yaw_left45
+reverse2
+```
 
-Some examples include headers to preserve their original sampling:
+Pass this sequence with `--actions-file path/to/actions.txt`, or use `--actions`
+with the actions separated by spaces. Use `--num-chunks N` to generate only the
+first N chunks.
 
-| Header | Meaning |
-| --- | --- |
-| `@dtype float32` | Store poses in float32 instead of the default float64 |
-| `@sampling smooth_turns` | Ease motion at action changes instead of using linear sampling |
-| `@last_frame include` | Include the final endpoint instead of excluding it |
+#### Coordinates and motion
 
-Keep these headers when reproducing an example. To build poses separately:
+Generated trajectories start at the origin, facing +Z, with +X to the right and
++Y down. Forward/backward and left/right follow the camera's heading on the
+horizontal plane, while up/down follows the world vertical axis. Yaw turns the
+camera in place, and pitch changes its viewing elevation. Combined translations
+follow the heading at the chunk's start, with a maximum translation magnitude
+of 5 per chunk. Both the UCPE module and the RepEncoder module derive their
+camera representations from the same global c2w trajectory: the UCPE module
+uses chunk-relative poses at metric scale, while the RepEncoder module
+normalizes translations by a scene scale computed from the selected source views.
+
+### Export or load camera poses
+
+Inference converts actions to c2w poses automatically. To export a trajectory
+without loading a model, run:
 
 ```bash
 python tools/build_trajectory.py \
-  --actions-file test/I2V/01_socrates/actions.txt \
-  --output-dir output/socrates_camera
+  --actions-file path/to/actions.txt \
+  --output-dir output/trajectory
 ```
 
-### Supply camera poses
+Use the resulting file with `--camera-path output/trajectory/camera.npy` in place
+of `--actions-file` or `--actions`.
 
-`camera.npy` stores global camera-to-world matrices with shape `[T, 3, 4]` or
-`[T, 4, 4]`, using the same right/down/forward convention. Supply one pose per
-frame and 33 frames per chunk, with translations in the model's metric scale.
-The inference code derives the internal camera representations; do not
-pre-normalize the file separately for UCPE or RepEncoder.
+You can also supply your own `.npy` file containing global c2w matrices with
+shape `[T, 3, 4]` or `[T, 4, 4]`. Use the same right/down/forward convention,
+with one pose per frame and 33 frames per chunk. Follow the coordinate and
+scale conventions described above.
 
 ## Prompt styles
 
-### Dynamic subjects: describe following and motion
+### Third-person following views
+
+![Cat input image](I2V/00_cat_vac/image.png)
 
 For a moving subject that should stay in view, begin with
-**“A third-person ... view closely follows ...”**. This encourages subject
-following; it is a prompt cue, not a tracking constraint. Describe the subject's
-appearance, its movement, and how it interacts with the surroundings. Keep
-nearby obstacles and background landmarks identifiable as the subject moves.
-
-The [Cat prompt](I2V/00_cat_vac/prompt.txt) starts:
+**“A third-person ... view closely follows ...”** to encourage subject following.
+Describe the subject's appearance, its movement, and its surroundings.
+For example, the [Cat prompt](I2V/00_cat_vac/prompt.txt) starts:
 
 > A third-person gameplay-like camera closely follows a gray robot vacuum moving through a modern interior with reflective hardwood floors and beautiful rays of light.
 
-It then describes the cat, the vacuum, the furniture, and how the cat balances
-during movement. Adapt the opening to the subject, for example
-“A third-person trailing view closely follows a cyclist ...”.
-For an environment with moving water or foliage but no followed subject, use
-the scene-focused style below and describe that environmental motion directly.
+The rest of the prompt describes the cat, the furniture, and how the cat balances
+on the moving vacuum.
 
-### Static scenes: describe space and fixed appearance
+### Scene descriptions
 
-Describe the scene as a coherent environment: its layout, foreground and
-background, materials, lighting, and relationships between objects. Camera
-motion comes from the trajectory. Avoid adding subject movement when the scene
-should remain static.
+![Waterfall input image](I2V/06_waterfall/image.png)
 
-The [Socrates prompt](I2V/01_socrates/prompt.txt) identifies the people as
-**static, painted sculptures** and explicitly says that all figures remain
-motionless, with rigid poses and fixed garment folds. This helps distinguish
-lifelike sculptures from living people. For an ordinary room or landscape,
-describe its actual contents rather than calling everything a sculpture.
+For scene-focused images, describe the setting, spatial layout, materials,
+lighting, and relationships between objects. For example, the
+[Waterfall prompt](I2V/06_waterfall/prompt.txt) starts:
+
+> A broad garden waterfall pours over layered dark rocks into a shallow pool surrounded by dense subtropical plants.
+
+It then describes the rock formations, surrounding foliage, and pool boundaries
+to establish the scene's structure.
+
+![Socrates input image](I2V/01_socrates/image.png)
+
+The [Socrates prompt](I2V/01_socrates/prompt.txt) starts:
+
+> A scene of static, painted sculptures depicts a solemn stone prison chamber, with classical figures neatly arranged around a low wooden bed.
+
+It describes the figures as painted sculptures, then details their poses,
+clothing, props, and arrangement within the chamber.
 
 ### Length and consistency
 

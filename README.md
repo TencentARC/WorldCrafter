@@ -30,39 +30,43 @@ cd WorldCrafter
 
 ### 2. Environment
 
-Use Python 3.11 on Linux with an NVIDIA GPU and a compatible driver.
+Set up the environment with **uv** or **conda + pip**. Both methods use Python 3.11 on Linux and require an NVIDIA GPU with a compatible driver.
 
-**Option A: uv (recommended)**
+**A: uv (recommended)**
 
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then run
 from the repository root:
 
 ```bash
-uv sync --project uvenv --frozen
+# Ubuntu / Debian
+sudo apt-get update
+sudo apt-get install -y ffmpeg
+
+uv sync --project uvenv --frozen --extra demo
 source uvenv/.venv/bin/activate
 ```
+
+For other Linux distributions, install [FFmpeg](https://ffmpeg.org/download.html)
+using your system package manager.
 
 This installs the locked PyTorch 2.10 / CUDA 12.8 environment and its
 acceleration dependencies.
 
-**Option B: conda + pip**
+**B: conda + pip**
 
 Create an environment and install PyTorch for your machine. For CUDA 12.8:
 
 ```bash
-conda create -n worldcrafter python=3.11 pip -y
+conda create -n worldcrafter -c conda-forge python=3.11 pip ffmpeg -y
 conda activate worldcrafter
 python -m pip install torch==2.10.0 torchvision==0.25.0 \
   --index-url https://download.pytorch.org/whl/cu128
-python -m pip install -e .
+python -m pip install -e ".[demo,xformers]" flash-attn-3==3.0.0 \
+  --extra-index-url https://download.pytorch.org/whl/cu128
 ```
 
 Choose the appropriate CUDA build from the
 [PyTorch installation commands](https://pytorch.org/get-started/previous-versions/#v2100).
-The default attention backend uses PyTorch; FlashAttention is not required.
-
-Both options support Base, Fast, and the interactive demo. See
-[uvenv/README.md](uvenv/README.md) for optional dependencies.
 
 ### 3. Model weights
 
@@ -84,30 +88,43 @@ Base model uses shared components from `WorldCrafter-Fast`, so keep both folders
 
 ## 💫 Inference
 
-### 1. Image-to-video
-
 See the [inference guide](test/README.md) for camera controls, prompt writing, and examples.
+
+### 1. Image-to-video
 
 Run with either model:
 
 ```bash
 # Base
-python inference.py --output-path output/base.mp4
+python inference.py --model-type base --mode i2v \
+  --image-path test/I2V/00_cat_vac/image.png \
+  --prompt-path test/I2V/00_cat_vac/prompt.txt \
+  --camera-path test/I2V/00_cat_vac/camera.npy \
+  --output-path output/base.mp4
 
 # Fast
-python inference.py --model-type fast --output-path output/fast.mp4
+python inference.py --model-type fast --mode i2v \
+  --image-path test/I2V/00_cat_vac/image.png \
+  --prompt-path test/I2V/00_cat_vac/prompt.txt \
+  --camera-path test/I2V/00_cat_vac/camera.npy \
+  --output-path output/fast.mp4
 ```
 
-Fast supports image-to-video and text-to-video at 384 × 640. Resuming a previous rollout is currently supported only by Base.
 
 ### 2. Text-to-video
 
 ```bash
 # Base
-python inference.py --mode t2v --output-path output/t2v.mp4
+python inference.py --model-type base --mode t2v \
+  --prompt-path test/T2V/00_red_balloon/prompt.txt \
+  --camera-path test/T2V/00_red_balloon/camera.npy \
+  --output-path output/t2v.mp4
 
 # Fast
-python inference.py --model-type fast --mode t2v --output-path output/fast_t2v.mp4
+python inference.py --model-type fast --mode t2v \
+  --prompt-path test/T2V/00_red_balloon/prompt.txt \
+  --camera-path test/T2V/00_red_balloon/camera.npy \
+  --output-path output/fast_t2v.mp4
 ```
 
 Compilation is **off by default**. Add `--enable-compile` to enable it; the first run takes longer to start.
@@ -122,37 +139,13 @@ python inference.py \
   --output-path output/custom.mp4
 ```
 
-Camera trajectories use global camera-to-world matrices in `[T, 3, 4]` or `[T, 4, 4]` NumPy arrays, with metric translations and 33 frames per chunk. Use `--num-chunks` to limit the rollout and `--chunk-output-dir` to save individual chunks.
 
-### 4. Camera actions
-
-Instead of `--camera-path`, describe a trajectory with actions:
-
-```bash
-python inference.py --model-type fast --actions "forward1x2 yaw_left30x3 backward1"
-```
-
-This generates six 33-frame chunks. Use `--actions-file actions.txt` for a saved
-sequence, or generate camera poses separately:
-
-```bash
-python tools/build_trajectory.py --actions-file actions.txt --output-dir output/trajectory
-python inference.py --model-type fast --camera-path output/trajectory/camera.npy
-```
-
-Choose one of `--camera-path`, `--actions`, or `--actions-file`.
-
-Without `--output-path`, each run writes `video.mp4` and its metadata under
-`output/<model>/<mode>/<run-id>/`. Use `--output-path` to choose an explicit filename.
-
-Run `python inference.py --help` for all options.
 
 ## 🎮 Interactive Demo
 
 > The interactive demo is currently being debugged.
 
-Install the [demo dependencies](uvenv/README.md#interactive-demo), then explore
-a scene with keyboard camera controls from your activated environment:
+Explore a scene with keyboard camera controls from your activated environment:
 
 ```bash
 python -m demo --model-path weights/WorldCrafter-Fast
