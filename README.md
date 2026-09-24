@@ -15,8 +15,6 @@ WorldCrafter enables consistent, camera-controlled scene exploration from an ima
 
 We provide **WorldCrafter-Base** and **WorldCrafter-Fast**, a distilled model for faster inference. 
 
-## 🎬 Video Demos
-
 https://github.com/user-attachments/assets/e0428e46-6740-4129-b822-f4c65e7612a1
 
 ## ⚙️ Setup
