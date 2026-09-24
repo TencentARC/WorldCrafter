@@ -129,7 +129,7 @@ scale conventions described above.
 
 ### Third-person following views
 
-![Cat input image](I2V/00_cat_vac/image.png)
+<img src="I2V/00_cat_vac/image.png" alt="Cat input image" width="640">
 
 For a moving subject that should stay in view, begin with
 **“A third-person ... view closely follows ...”** to encourage subject following.
@@ -141,11 +141,11 @@ For example, the [Cat prompt](I2V/00_cat_vac/prompt.txt) starts:
 The rest of the prompt describes the cat, the furniture, and how the cat balances
 on the moving vacuum.
 
-### Scene descriptions
+### First-person views
 
-![Waterfall input image](I2V/06_waterfall/image.png)
+<img src="I2V/06_waterfall/image.png" alt="Waterfall input image" width="640">
 
-For scene-focused images, describe the setting, spatial layout, materials,
+For first-person views, describe the setting, spatial layout, materials,
 lighting, and relationships between objects. For example, the
 [Waterfall prompt](I2V/06_waterfall/prompt.txt) starts:
 
@@ -154,7 +154,7 @@ lighting, and relationships between objects. For example, the
 It then describes the rock formations, surrounding foliage, and pool boundaries
 to establish the scene's structure.
 
-![Socrates input image](I2V/01_socrates/image.png)
+<img src="I2V/01_socrates/image.png" alt="Socrates input image" width="640">
 
 The [Socrates prompt](I2V/01_socrates/prompt.txt) starts:
 
