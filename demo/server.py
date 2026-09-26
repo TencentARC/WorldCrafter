@@ -45,7 +45,8 @@ def health():
         pyramid=[2, 2, 2],
         fps=16,
         compile_enabled=m.model_info.get("compile_enabled", False),
-        gpu_mode="single",
+        gpu_mode=m.model_info.get("gpu_mode", "single"),
+        gpu_count=m.model_info.get("gpu_count", 1),
     )
 
 

@@ -14,25 +14,27 @@ class ChunkCancelled(Exception):
 
 
 class WorldCrafterEngine:
-    def __init__(self):
+    def __init__(self, device="cuda:0"):
         import torch
         from worldcrafter import WorldCrafter
 
         self.torch = torch
+        self.device = torch.device(device)
         self.model = WorldCrafter.from_pretrained(
             MODEL_PATH,
             model_type="fast",
-            device="cuda:0",
+            device=self.device,
             attention_backend="native",
             enable_compile=True,
         )
         self.pipe = self.model.pipeline
         self.repencoder = self.model.memory_provider.runtime
         self.info = dict(self.model.fast_report, gpu_mode="single")
-        self.devices = [0]
+        self.devices = [self.device.index]
         self.session = None
         (DATA / "reports").mkdir(parents=True, exist_ok=True)
-        (DATA / "reports/model_setup.json").write_text(
+        report_name = "model_setup.json" if self.device.index == 0 else f"model_setup_gpu{self.device.index}.json"
+        (DATA / "reports" / report_name).write_text(
             json.dumps(self.info, indent=2) + "\n"
         )
 
@@ -60,7 +62,7 @@ class WorldCrafterEngine:
         self.pipe.stage_model_trace.clear()
         if hasattr(self.pipe, "resident_branches"):
             self.pipe.resident_branches.switch("equal")
-        self.generator = torch.Generator(device="cuda:0").manual_seed(seed)
+        self.generator = torch.Generator(device=self.device).manual_seed(seed)
         self.session = stream_chunks(
             self.pipe,
             image=Image.open(image).convert("RGB"),
@@ -96,10 +98,10 @@ class WorldCrafterEngine:
         self.check_cancel()
         local, world = self.camera.append(action) if poses is None else poses
         camera = dict(
-            pose=torch.from_numpy(local[None]).to("cuda"),
-            retrieval_pose=torch.from_numpy(world[None]).to("cuda"),
-            x_fov=torch.tensor([100.0], device="cuda"),
-            xi=torch.tensor([0.0], device="cuda"),
+            pose=torch.from_numpy(local[None]).to(self.device),
+            retrieval_pose=torch.from_numpy(world[None]).to(self.device),
+            x_fov=torch.tensor([100.0], device=self.device),
+            xi=torch.tensor([0.0], device=self.device),
         )
         with torch.inference_mode():
             self.provider.append_trajectory(camera["retrieval_pose"], self.index)

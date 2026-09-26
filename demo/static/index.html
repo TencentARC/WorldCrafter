@@ -149,6 +149,13 @@
           step="0.1"
           value="1"
         />
+        <label for="rotationMode">旋转模式</label>
+        <select id="rotationMode">
+          <option value="look">Look · 原地转头</option>
+          <option value="orbit">Orbit · 环绕</option>
+        </select>
+        <label for="orbitRadius">Orbit 半径 <span id="orbitRadiusLabel">2.0</span></label>
+        <input id="orbitRadius" type="range" min="0" max="5" step="0.1" value="2" />
         <label for="rotationAngle"
           >方向键旋转角度 <span id="rotationAngleLabel">15° / 段</span></label
         >

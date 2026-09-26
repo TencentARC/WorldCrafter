@@ -3,7 +3,7 @@
 import math
 import numpy as np
 
-from worldcrafter.camera import Action, sample_chunk
+from worldcrafter.camera import Action, sample_chunk, relative_poses, DEFAULT_ORBIT_RADIUS
 
 
 class ControlBuffer:
@@ -27,6 +27,8 @@ class ControlBuffer:
         self.speed = 1.0
         self.vertical_speed = 1.0
         self.rotation_angle = 15.0
+        self.rotation_mode = "look"
+        self.orbit_radius = DEFAULT_ORBIT_RADIUS
 
     def clear(self):
         self.held = set()
@@ -47,11 +49,17 @@ class ControlBuffer:
                 self.held.add(key)
             else:
                 self.held.discard(key)
-        elif kind in ("speed", "vertical_speed", "rotation_angle"):
+        elif kind == "rotation_mode":
+            if message["value"] not in ("look", "orbit"):
+                raise ValueError("Rotation mode must be look or orbit")
+            self.rotation_mode = message["value"]
+        elif kind in ("speed", "vertical_speed", "rotation_angle", "orbit_radius"):
             value = float(message["value"])
             if not math.isfinite(value):
                 raise ValueError("Control setting must be finite")
             low, high = (1.0, 30.0) if kind == "rotation_angle" else (0.1, 5.0)
+            if kind == "orbit_radius":
+                low, high = 0.0, 5.0
             setattr(self, kind, max(low, min(high, value)))
         else:
             raise ValueError("Unknown control")
@@ -65,7 +73,11 @@ class ControlBuffer:
         field, sign = self.KEYS[key]
         value = sign * self.rotation_angle if field in ("yaw", "pitch") else sign
         speed = self.vertical_speed if field == "up" else self.speed
-        return Action(**{field: value}, speed=speed).normalized()
+        orbit = self.rotation_mode == "orbit" and field in ("yaw", "pitch")
+        return Action(
+            **{field: value}, speed=speed,
+            orbit=orbit, orbit_radius=self.orbit_radius if orbit else 0.0,
+        ).normalized()
 
     def consume(self):
         action = self.peek()
@@ -83,11 +95,11 @@ class Camera:
 
     def append(self, action):
         global_pose, end = sample_chunk(self.world, action.normalized())
-        local = np.linalg.inv(self.world)[None] @ global_pose
-        local[0] = np.eye(4)
+        global_pose = global_pose[:, :3].astype(np.float32)
+        local = relative_poses(global_pose)
         self.world = end
-        self.local_chunks.append(local[:, :3].astype(np.float32))
-        self.global_chunks.append(global_pose[:, :3].astype(np.float32))
+        self.local_chunks.append(local)
+        self.global_chunks.append(global_pose)
         return self.poses()
 
     def poses(self):

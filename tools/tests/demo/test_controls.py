@@ -64,7 +64,7 @@ class CameraTests(unittest.TestCase):
             self.assertAlmostEqual(camera.world[1, 3] - start[1, 3], -sign * 0.6)
             np.testing.assert_array_equal(local[:99], prefix[0])
             np.testing.assert_array_equal(world[:99], prefix[1])
-            np.testing.assert_array_equal(local[-33], np.eye(4, dtype=np.float32)[:3])
+            np.testing.assert_allclose(local[-33], np.eye(4, dtype=np.float32)[:3], atol=1e-12)
         self.assertAlmostEqual(camera.world[1, 3], 0)
 
     def test_single_axis_required_and_limits(self):

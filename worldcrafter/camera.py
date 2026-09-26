@@ -16,6 +16,7 @@ import numpy as np
 CHUNK_FRAMES = 33
 FPS = 16
 MAX_TRANSLATION = 5.0
+DEFAULT_ORBIT_RADIUS = 2.0
 ACTION_FIELDS = {
     "forward": ("forward", 1),
     "backward": ("forward", -1),
@@ -27,6 +28,10 @@ ACTION_FIELDS = {
     "yaw_right": ("yaw", 1),
     "pitch_up": ("pitch", 1),
     "pitch_down": ("pitch", -1),
+    "orbit_left": ("orbit_yaw", -1),
+    "orbit_right": ("orbit_yaw", 1),
+    "orbit_up": ("orbit_pitch", 1),
+    "orbit_down": ("orbit_pitch", -1),
 }
 ALIASES = {
     "f": "forward", "b": "backward", "l": "left", "r": "right",
@@ -42,6 +47,8 @@ class Action:
     pitch: float = 0.0
     speed: float = 1.0
     up: float = 0.0
+    orbit: bool = False
+    orbit_radius: float = 0.0
 
     def validate(self):
         values = (self.forward, self.right, self.up, self.yaw, self.pitch)
@@ -49,6 +56,8 @@ class Action:
             raise ValueError("Control values must be finite")
         if sum(v != 0 for v in values) > 1:
             raise ValueError("Only one movement or rotation may be active per chunk")
+        if not math.isfinite(self.orbit_radius) or self.orbit_radius < 0:
+            raise ValueError("Orbit radius must be finite and non-negative")
 
     def normalized(self):
         """Apply the interactive controls' slider limits."""
@@ -60,6 +69,8 @@ class Action:
             yaw=max(-30.0, min(30.0, self.yaw)),
             pitch=max(-30.0, min(30.0, self.pitch)),
             speed=max(0.1, min(MAX_TRANSLATION, self.speed)),
+            orbit=self.orbit,
+            orbit_radius=self.orbit_radius,
         )
 
     def json(self):
@@ -112,8 +123,8 @@ def parse_actions(text: str) -> list[str]:
     return events
 
 
-def parse_trajectory(text: str) -> tuple[list[str], dict[str, str]]:
-    """Read actions and optional @dtype, @sampling, and @last_frame headers."""
+def parse_trajectory(text: str) -> tuple[list[str], dict[str, str | float]]:
+    """Read actions and trajectory settings from text."""
     choices = {
         "dtype": {"float32", "float64"},
         "sampling": {"linear", "smooth_turns"},
@@ -124,6 +135,12 @@ def parse_trajectory(text: str) -> tuple[list[str], dict[str, str]]:
         line = line.split("#", 1)[0].strip()
         if line.startswith("@"):
             fields = line[1:].split()
+            if len(fields) == 2 and fields[0] == "orbit_radius" and not lines:
+                radius = float(fields[1])
+                if not math.isfinite(radius) or radius < 0:
+                    raise ValueError("Orbit radius must be finite and non-negative")
+                options["orbit_radius"] = radius
+                continue
             if len(fields) != 2 or fields[0] not in choices or fields[1] not in choices[fields[0]]:
                 raise ValueError(f"Invalid trajectory setting: {line}")
             if lines:
@@ -141,9 +158,11 @@ def count_chunks(events: list[str]) -> int:
     )
 
 
-def action_from_event(event: str) -> Action:
+def action_from_event(event: str, orbit_radius: float = DEFAULT_ORBIT_RADIUS) -> Action:
     name, amount = parse_event(event)
     field, sign = ACTION_FIELDS[name]
+    if field.startswith("orbit_"):
+        return Action(**{field[6:]: sign * amount}, orbit=True, orbit_radius=orbit_radius)
     if field in {"yaw", "pitch"}:
         return Action(**{field: sign * amount})
     return Action(**{field: sign}, speed=amount)
@@ -156,6 +175,15 @@ def rotation_y(degrees: float) -> np.ndarray:
         ((cosine, 0.0, sine), (0.0, 1.0, 0.0), (-sine, 0.0, cosine)),
         dtype=np.float64,
     )
+
+
+def relative_poses(chunk: np.ndarray) -> np.ndarray:
+    """Convert a global c2w chunk to FP32 poses relative to its first frame."""
+    homogeneous = np.zeros((len(chunk), 4, 4), dtype=np.float64)
+    homogeneous[:, :3, :4] = np.asarray(chunk)[:, :3, :4]
+    homogeneous[:, 3, 3] = 1.0
+    relative = np.linalg.inv(homogeneous[0])[None] @ homogeneous
+    return relative[:, :3, :4].astype(np.float32)
 
 
 def rotation_x(degrees: float) -> np.ndarray:
@@ -198,6 +226,16 @@ def sample_chunk(
         for index, fraction in enumerate(alpha):
             poses[index, :3, :3] = rotated(fraction)
         end[:3, :3] = rotated(1.0)
+        if action.orbit and action.orbit_radius:
+            radius = action.orbit_radius
+            angle = math.radians(abs(action.yaw or action.pitch))
+            if radius * angle > MAX_TRANSLATION + 1e-12:
+                raise ValueError("Orbit arc length must not exceed 5 per chunk; reduce radius or angle")
+            center = start[:3, 3] + radius * start[:3, 2]
+            poses[:, :3, 3] = center - radius * poses[:, :3, 2]
+            if alpha[0] == 0:
+                poses[0, :3, 3] = start[:3, 3]
+            end[:3, 3] = center - radius * end[:3, 2]
     else:
         if action.up:
             direction = np.array([0.0, -action.up, 0.0])
@@ -213,10 +251,12 @@ def sample_chunk(
     return poses, end
 
 
-def _sample_event(start: np.ndarray, event: str, fractions: np.ndarray) -> np.ndarray:
+def _sample_event(start: np.ndarray, event: str, fractions: np.ndarray, orbit_radius=DEFAULT_ORBIT_RADIUS) -> np.ndarray:
     components = event.split("&")
     if len(components) == 1:
-        return sample_chunk(start, action_from_event(event), fractions=fractions)[0]
+        return sample_chunk(start, action_from_event(event, orbit_radius), fractions=fractions)[0]
+    if any(part.startswith("orbit_") for part in components):
+        raise ValueError("Use orbit as a separate action")
     poses = np.repeat(start[None], len(fractions), axis=0)
     delta = np.zeros(3)
     for component in components:
@@ -236,7 +276,7 @@ def _sample_event(start: np.ndarray, event: str, fractions: np.ndarray) -> np.nd
     return poses
 
 
-def _sample_curve(start, event, tangent_start, tangent_end, times):
+def _sample_curve(start, event, tangent_start, tangent_end, times, *, orbit_radius=DEFAULT_ORBIT_RADIUS):
     fractions = times
     if tangent_start is not None:
         fractions = (
@@ -244,7 +284,7 @@ def _sample_curve(start, event, tangent_start, tangent_end, times):
             + (times**3 - 2 * times**2 + times) * tangent_start
             + (times**3 - times**2) * tangent_end
         )
-    return _sample_event(start, event, fractions)
+    return _sample_event(start, event, fractions, orbit_radius)
 
 
 def _reverse_curve(curve, times):
@@ -257,10 +297,12 @@ def _reverse_sampled_curve(curve, last_time, times):
 
 def build_trajectory(
     events: list[str], *, dtype: str = "float64", sampling: str = "linear",
-    last_frame: str = "exclude",
+    last_frame: str = "exclude", orbit_radius: float = DEFAULT_ORBIT_RADIUS,
 ) -> tuple[np.ndarray, list[dict[str, object]]]:
     if not events:
         raise ValueError("Provide at least one camera action")
+    if not math.isfinite(orbit_radius) or orbit_radius < 0:
+        raise ValueError("Orbit radius must be finite and non-negative")
     world = np.eye(4, dtype=np.float64)
     chunks, records, curves, sample_times = [], [], [], []
 
@@ -315,6 +357,7 @@ def build_trajectory(
         curve = partial(
             _sample_curve, world.copy(), event,
             float(entering) if smooth else None, float(leaving),
+            orbit_radius=orbit_radius,
         )
         append(event, curve, times)
     return np.concatenate(chunks).astype(dtype), records
@@ -322,7 +365,7 @@ def build_trajectory(
 
 def save_trajectory(
     directory: Path, camera: np.ndarray, records: list[dict[str, object]], *, fps: int = FPS,
-    events: list[str] | None = None, options: dict[str, str] | None = None,
+    events: list[str] | None = None, options: dict[str, str | float] | None = None,
 ) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     camera_path = directory / "camera.npy"

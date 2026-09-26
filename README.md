@@ -131,16 +131,15 @@ Compilation is **off by default**. Add `--enable-compile` to enable it; the firs
 
 ## 🎮 Interactive Demo
 
-> The interactive demo is currently being debugged.
-
 Explore a scene with keyboard camera controls from your activated environment:
 
 ```bash
 python -m demo --model-path weights/WorldCrafter-Fast
 ```
 
-Open `http://localhost:8080`. The single-GPU demo uses Fast image-to-video with
-compilation enabled. See [demo/README.md](demo/README.md) for controls and deployment.
+Open `http://localhost:8080`. The demo uses Fast image-to-video with compilation
+enabled. Add `--devices 0,1` to use two GPUs. See [demo/README.md](demo/README.md)
+for camera controls, orbit settings, and deployment.
 
 ## 📝 Citation
 

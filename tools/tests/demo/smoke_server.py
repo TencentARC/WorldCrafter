@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Two real chunks: compile, pause/resume, camera controls, and video decoding."""
+"""Real chunks: compile, pause/resume, translation, orbit, and video decoding."""
 import asyncio
 import json
 import os
@@ -11,6 +11,7 @@ from urllib.error import HTTPError
 import websockets
 
 PORT = int(os.environ.get("WORLDCRAFTER_SMOKE_PORT", "8080"))
+GPUS = int(os.environ.get("WORLDCRAFTER_SMOKE_GPUS", "1"))
 URL = f"http://127.0.0.1:{PORT}"
 
 
@@ -37,12 +38,12 @@ async def main():
             pass
         assert time.monotonic() < deadline, "Model startup timeout"
         await asyncio.sleep(2)
-    assert health["gpu_mode"] == "single"
+    assert health["gpu_mode"] == ("single" if GPUS == 1 else "query_parallel")
     assert health["compile_enabled"]
     assert health["route"] == ["A"] * 5 + ["B"]
     presets = request("/api/presets")
     preset = next(p for p in presets["presets"] if p["id"] == presets["default"])
-    body = dict(preset=preset["id"], prompt=preset["prompt"], seed=42, max_chunks=2)
+    body = dict(preset=preset["id"], prompt=preset["prompt"], seed=42, max_chunks=3)
     created = request("/api/sessions", body)
     sid = created["session_id"]
     try:
@@ -74,8 +75,14 @@ async def main():
                 await send("resume")
             if event["type"] == "chunk_started" and event["chunk_index"] == 1:
                 assert event["action"]["up"] == 1 and event["action"]["forward"] == 0
+                await send("rotation_mode", value="orbit")
+                await send("orbit_radius", value=2)
+                await send("key", key="arrowleft", down=True)
+                await send("key", key="arrowleft", down=False)
+            if event["type"] == "chunk_started" and event["chunk_index"] == 2:
+                assert event["action"]["orbit"] and event["action"]["orbit_radius"] == 2
             if event["type"] == "chunk_ready":
-                assert len(event["memory"]["devices"]) == 1
+                assert len(event["memory"]["devices"]) == GPUS
                 assert [s["branch"] for s in event["route"]] == ["equal"] * 5 + ["old"]
             if event["type"] == "status" and event["state"] == "complete":
                 break
@@ -134,7 +141,7 @@ async def main():
         )
     )["streams"][0]
     assert (frames["nb_read_frames"], frames["width"], frames["height"]) == (
-        "66",
+        "99",
         640,
         384,
     )

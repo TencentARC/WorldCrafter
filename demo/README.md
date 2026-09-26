@@ -5,7 +5,7 @@ WorldCrafter-Fast. Compilation is enabled, so the first generation takes longer.
 
 ## Run
 
-Validated on a single NVIDIA H200.
+Validated on one and two NVIDIA H200 GPUs.
 Place the complete `WorldCrafter-Fast` folder under `weights/` as described in
 the main README. Base weights are not required for the demo.
 Install FFmpeg so that `ffmpeg` and `ffprobe` are available on `PATH`.
@@ -19,15 +19,20 @@ python -m demo \
   --output-dir output/demo
 ```
 
+Use `--devices 0` for one GPU (the default), or `--devices 0,1` for two GPUs.
+Indices refer to the GPUs visible through `CUDA_VISIBLE_DEVICES` when it is set.
+The two-GPU mode splits attention queries while keeping a complete model on
+each GPU. Both modes use the same precision, sampling settings, and controls.
+
 Open `http://localhost:8080`. Select a preset or upload an image, edit its prompt,
 and start a session. One session can generate at a time. Outputs include video
 chunks, camera trajectories, and session metadata in the output directory.
 
 The service listens on `127.0.0.1` by default. For a remote machine, forward the
 port with `ssh -N -L 8080:127.0.0.1:8080 <host>`. Use `--host` and `--port` to
-change the listen address. Run one server process per GPU; multiple web workers
-would each load a separate model. This demo has no authentication, so use an
-authenticated proxy when making it publicly accessible.
+change the listen address. Run one server process per selected GPU group;
+multiple web workers would each load a separate model. This demo has no
+authentication, so use an authenticated proxy when making it publicly accessible.
 
 ## Controls
 
@@ -40,10 +45,17 @@ authenticated proxy when making it publicly accessible.
 | Up / down arrows | `pitch_up` / `pitch_down`: look up / down |
 | Esc or window blur | Clear pending movement |
 
+Choose **Look** for in-place turns or **Orbit** to move around a point in front
+of the camera. The **Orbit radius** slider sets its distance (default 2);
+radius 0 gives the same motion as Look. Arrow keys describe the viewing turn,
+so the left arrow turns left while moving right around the orbit center.
+Consecutive orbit actions keep the same center. Moving, looking in place, or
+changing the radius establishes a new center from the current pose.
+
 Each chunk uses one action. A new key replaces the pending action until the next
 chunk starts. Tap for one chunk or hold for continued movement. With no pending
 action, generation waits. Pause, resume, restart, and video download are
 available in the page.
 
-The demo and [script camera actions](../README.md#4-camera-actions) use the same
+The demo and [script camera actions](../test/README.md#camera-inputs) use the same
 motion rules. Looking up or down does not change the height of W/S/A/D movement.

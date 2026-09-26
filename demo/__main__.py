@@ -1,4 +1,4 @@
-"""Launch the compiled, single-GPU I2V demo."""
+"""Launch the compiled I2V demo on one or two GPUs."""
 
 import argparse
 import os
@@ -20,11 +20,23 @@ def main():
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--mock", action="store_true")
+    parser.add_argument("--devices", default="0", help="One or two visible GPU indices, e.g. 0,1")
     args = parser.parse_args()
+    devices = args.devices.split(",")
+    if len(devices) not in (1, 2) or len(set(devices)) != len(devices) or not all(d.isdigit() for d in devices):
+        parser.error("--devices must contain one or two distinct GPU indices")
+    visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if visible is not None:
+        available = visible.split(",")
+        if any(int(device) >= len(available) for device in devices):
+            parser.error("--devices exceeds the GPUs in CUDA_VISIBLE_DEVICES")
+        devices = [available[int(device)] for device in devices]
     os.environ.update(
         WORLDCRAFTER_DEMO_MODEL=str(args.model_path.resolve()),
         WORLDCRAFTER_DEMO_DATA=str(args.output_dir.resolve()),
         WORLDCRAFTER_DEMO_MOCK=str(int(args.mock)),
+        CUDA_VISIBLE_DEVICES=",".join(devices),
+        WORLDCRAFTER_DEMO_GPUS=str(len(devices)),
     )
     import uvicorn
 

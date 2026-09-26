@@ -68,6 +68,8 @@ use `#` for comments.
 | Up / down | `up1`, `down1` | Same |
 | Turn left / right | `yaw_left30`, `yaw_right30` | `yl30`, `yr30` |
 | Look up / down | `pitch_up15`, `pitch_down15` | `pu15`, `pd15` |
+| Orbit with a left / right turn | `orbit_left15`, `orbit_right15` | Same |
+| Orbit with an upward / downward turn | `orbit_up15`, `orbit_down15` | Same |
 | Repeat over N chunks | `forward1xN` | `f1xN` |
 | Combine within one chunk | `forward2&right2&yaw_left45` | `f2&r2&yl45` |
 | Retrace the preceding N chunks | `reverseN` | Same |
@@ -86,6 +88,10 @@ yaw_left30
 yaw_right30
 pitch_up15
 pitch_down15
+orbit_left15
+orbit_right15
+orbit_up15
+orbit_down15
 forward2&right2&yaw_left45
 reverse2
 ```
@@ -93,6 +99,16 @@ reverse2
 Pass this sequence with `--actions-file path/to/actions.txt`, or use `--actions`
 with the actions separated by spaces. Use `--num-chunks N` to generate only the
 first N chunks.
+
+Orbit keeps the camera aimed at a point along its current forward direction.
+Set the distance to this point with `--orbit-radius 2` (the default is 2), or
+put `@orbit_radius 2` at the beginning of the action file. The command-line
+value takes precedence. A radius of 0 produces an in-place yaw or pitch turn.
+Directions describe the viewing turn: `orbit_left15` turns left while moving
+the camera right around the center. Consecutive orbit actions preserve the
+center; a translation, in-place turn, or radius change establishes a new one.
+Orbit actions occupy separate chunks and support repetition and reversal.
+Keep the arc length per chunk, `radius × angle × π / 180`, at most 5.
 
 #### Coordinates and motion
 

@@ -216,12 +216,8 @@ def _relative_pose_chunk(
     end = start + int(window_num_frames)
     if pose.shape[1] < end:
         return None
-    chunk = np.asarray(pose[0, start:end], dtype=np.float64)
-    homogeneous = np.zeros((window_num_frames, 4, 4), dtype=np.float64)
-    homogeneous[:, :3, :4] = chunk[:, :3, :4]
-    homogeneous[:, 3, 3] = 1.0
-    relative = np.linalg.inv(homogeneous[0])[None] @ homogeneous
-    return torch.from_numpy(relative[:, :3, :4].astype(np.float32)).unsqueeze(0).to(device)
+    from ..camera import relative_poses
+    return torch.from_numpy(relative_poses(pose[0, start:end])).unsqueeze(0).to(device)
 
 
 def build_ucpe_attention_kwargs_for_chunk(

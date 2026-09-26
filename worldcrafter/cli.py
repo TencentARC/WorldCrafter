@@ -36,6 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
     camera.add_argument("--camera-path", type=Path, help="Global c2w trajectory (.npy)")
     camera.add_argument("--actions", help='Camera actions, e.g. "forward1x2 yaw_left30x3 backward1"')
     camera.add_argument("--actions-file", type=Path, help="TXT file of camera actions")
+    parser.add_argument("--orbit-radius", type=float, help="Metric radius for orbit actions (default: 2)")
     parser.add_argument("--prompt")
     parser.add_argument("--prompt-path", type=Path)
     parser.add_argument("--negative-prompt")
@@ -116,6 +117,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             raise ValueError("--local-camera-path cannot be combined with camera actions")
         text = args.actions if args.actions is not None else args.actions_file.read_text(encoding="utf-8-sig")
         args.camera_events, args.camera_options = parse_trajectory(text)
+        if args.orbit_radius is not None:
+            args.camera_options["orbit_radius"] = args.orbit_radius
         if args.num_chunks is not None:
             total = count_chunks(args.camera_events)
             if args.num_chunks > total:
@@ -124,6 +127,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         args.camera_path = (
             DEFAULT_I2V_CAMERA if args.mode == "i2v" else DEFAULT_T2V_CAMERA
         )
+    if args.orbit_radius is not None and args.camera_events is None:
+        raise ValueError("--orbit-radius requires --actions or --actions-file")
     if args.prompt is None:
         prompt_path = args.prompt_path
         if prompt_path is None:

@@ -17,6 +17,7 @@ def main() -> None:
     source.add_argument("--actions-file", type=Path, help="TXT file of camera actions")
     source.add_argument("--events", nargs="+", help=argparse.SUPPRESS)
     parser.add_argument("--output-dir", type=Path, default=Path("output/trajectory"))
+    parser.add_argument("--orbit-radius", type=float)
     args = parser.parse_args()
 
     if args.actions_file is not None:
@@ -25,6 +26,8 @@ def main() -> None:
         text = args.actions if args.actions is not None else " ".join(args.events)
     try:
         events, options = parse_trajectory(text)
+        if args.orbit_radius is not None:
+            options["orbit_radius"] = args.orbit_radius
         camera, records = build_trajectory(events, **options)
     except ValueError as error:
         parser.error(str(error))

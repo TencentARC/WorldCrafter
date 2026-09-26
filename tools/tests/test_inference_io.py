@@ -51,6 +51,7 @@ class InferenceIOTests(unittest.TestCase):
     def test_session_initialization_advances_generator(self):
         engine = WorldCrafterEngine.__new__(WorldCrafterEngine)
         engine.torch = torch
+        engine.device = torch.device("cuda:0")
         engine.session = None
         engine.repencoder = object()
         engine.pipe = types.SimpleNamespace(stage_model_trace=[])

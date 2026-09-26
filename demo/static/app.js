@@ -71,6 +71,7 @@ function actionText(a) {
     parts.push(
       `${a.pitch > 0 ? "抬头" : "低头"} ${Math.abs(a.pitch).toFixed(0)}°`,
     );
+  if (a.orbit) parts.push(`Orbit · 半径 ${a.orbit_radius.toFixed(1)} m`);
   return parts.join(" · ") || "静止";
 }
 class Player {
@@ -258,6 +259,8 @@ $("start").addEventListener("click", async () => {
       send({ type: "speed", value: Number($("speed").value) });
       send({ type: "vertical_speed", value: Number($("verticalSpeed").value) });
       send({ type: "rotation_angle", value: Number($("rotationAngle").value) });
+      send({ type: "rotation_mode", value: $("rotationMode").value });
+      send({ type: "orbit_radius", value: Number($("orbitRadius").value) });
     };
     ws.onmessage = (e) => {
       if (ws !== connection) return;
@@ -294,6 +297,14 @@ for (const type of ["pause", "resume", "reset", "stop"])
     if (type === "reset" || type === "stop") clearKeys();
     send({ type });
   });
+$("rotationMode").addEventListener("change", () => {
+  send({ type: "rotation_mode", value: $("rotationMode").value });
+});
+$("orbitRadius").addEventListener("input", () => {
+  const value = Number($("orbitRadius").value);
+  $("orbitRadiusLabel").textContent = value.toFixed(1);
+  send({ type: "orbit_radius", value });
+});
 for (const [id, type, label, angle] of [
   ["speed", "speed", "speedLabel", false],
   ["verticalSpeed", "vertical_speed", "verticalSpeedLabel", false],
