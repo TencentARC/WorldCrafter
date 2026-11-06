@@ -32,7 +32,7 @@
 
 ## 🔆 Introduction
 
-- **[2026-11-06]**: Release [**WorldCrafter-Context**](https://huggingface.co/Drexubery/WorldCrafter-Context), an autoregressive baseline with naive context memory and UCPE camera control for developing custom memory mechanisms.
+- **[2026-11-06]**: Release [**WorldCrafter-Context**](https://huggingface.co/Drexubery/WorldCrafter-Context), a chunk-wise AR video diffusion model with naive context memory and UCPE camera control for developing custom memory mechanisms.
 - **[2026-10-30]**: 🏆 **WorldCrafter-Fast ranks 1st** on [Orbia](https://orbia-bench.github.io/#leaderboard), a comprehensive benchmark for 3D consistency in interactive world models.
 - **[2026-10-28]**: Release a [high-quality subset](https://huggingface.co/datasets/Drexubery/WorldCrafter/tree/main/benchmark) of WorldCrafter's test benchmark: 144 image–prompt pairs for first-person exploration and third-person subject following.
 - **[2026-10-22]**: Release [fine-tuning code](training/README.md) for **WorldCrafter-Base**.
