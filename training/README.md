@@ -5,21 +5,6 @@ download videos, prepare video latents and caption embeddings, train, and export
 model for inference. Use the **[WorldCrafter dataset](https://huggingface.co/datasets/Drexubery/WorldCrafter)**
 or your own captioned videos through the same preparation script.
 
-## WorldCrafter-Context baseline
-
-[**WorldCrafter-Context**](https://huggingface.co/Drexubery/WorldCrafter-Context)
-is an autoregressive baseline with historical-frame context memory and UCPE camera
-control, without a memory encoder. It is intended for developing custom memory
-mechanisms, such as point-cloud conditioning.
-
-To construct it, combine **Base's `transformer/`**, **Context's
-`camera_adapter.bin`**, and **Fast's `text_encoder/`, `tokenizer/`, `vae/` and
-`scheduler/`**. Supply historical video latents as context; do not load Base/Fast's
-additional LoRA, camera adapters or RepEncoder. See the
-[model card](https://huggingface.co/Drexubery/WorldCrafter-Context#download) for
-shared-component downloads. Context requires a custom context-memory integration;
-the fine-tuning commands below target WorldCrafter-Base.
-
 ## Set up
 
 Run all commands from the repository root:
@@ -265,3 +250,18 @@ training/
 ├── pack_features.py        # Optional lossless feature archives
 └── utils/                 # Shared data, camera, sampling, loss and checkpoint helpers
 ```
+
+## WorldCrafter-Context baseline
+
+[**WorldCrafter-Context**](https://huggingface.co/Drexubery/WorldCrafter-Context)
+is an autoregressive baseline with historical-frame context memory and UCPE camera
+control, without a memory encoder. It is intended for developing custom memory
+mechanisms, such as point-cloud conditioning.
+
+To construct it, combine **Base's `transformer/`**, **Context's
+`camera_adapter.bin`**, and **Fast's `text_encoder/`, `tokenizer/`, `vae/` and
+`scheduler/`**. Supply historical video latents as context; do not load Base/Fast's
+additional LoRA, camera adapters or RepEncoder. See the
+[model card](https://huggingface.co/Drexubery/WorldCrafter-Context#download) for
+shared-component downloads. Context requires a custom context-memory integration;
+the fine-tuning commands above target WorldCrafter-Base.
