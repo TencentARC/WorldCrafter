@@ -32,6 +32,7 @@
 
 ## 🔆 Introduction
 
+- **[2026-11-06]**: Release [**WorldCrafter-Context**](https://huggingface.co/Drexubery/WorldCrafter-Context), an autoregressive baseline with context memory and UCPE camera control for developing custom memory mechanisms.
 - **[2026-10-30]**: 🏆 **WorldCrafter-Fast ranks 1st** on [Orbia](https://orbia-bench.github.io/#leaderboard), a comprehensive benchmark for 3D consistency in interactive world models.
 - **[2026-10-28]**: Release a [high-quality subset](https://huggingface.co/datasets/Drexubery/WorldCrafter/tree/main/benchmark) of WorldCrafter's test benchmark: 144 image–prompt pairs for first-person exploration and third-person subject following.
 - **[2026-10-22]**: Release [fine-tuning code](training/README.md) for **WorldCrafter-Base**.
@@ -101,6 +102,7 @@ Choose the appropriate CUDA build from the
 | --- | --- | --- |
 | WorldCrafter-Base | 🤗 [Hugging Face](https://huggingface.co/TencentARC/WorldCrafter-Base) | Base model |
 | WorldCrafter-Fast | 🤗 [Hugging Face](https://huggingface.co/TencentARC/WorldCrafter-Fast) | Distilled high- and low-noise models for faster inference |
+| WorldCrafter-Context | 🤗 [Hugging Face](https://huggingface.co/Drexubery/WorldCrafter-Context) | Intermediate training checkpoint with context memory and no memory encoder |
 
 Download weights with the Hugging Face CLI:
 
@@ -116,6 +118,8 @@ hf download Qwen/Qwen3-VL-4B-Instruct --local-dir weights/Qwen3-VL-4B-Instruct
 ```
 
 Base model uses shared components from `WorldCrafter-Fast`, so keep both folders when using base model.
+
+For the Context baseline and its shared-weight downloads, see [Context baseline](training/README.md#worldcrafter-context-baseline).
 
 ## 💫 Inference
 
